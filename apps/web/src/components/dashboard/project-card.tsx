@@ -23,15 +23,17 @@ import { formatEditedAt } from "./utils";
 
 type DashboardProjectCardProps = {
   project: ProjectRecord;
-  /** Whether the card is the selected one in its grid. */
+  /** Whether the card is selected in its grid. */
   active: boolean;
-  /** A single click, or a right-click, landed on the card. */
-  onSelect: () => void;
-  /** Escape was pressed on the card. */
-  onDeselect: () => void;
+  /** What the menu acts on: the selection the card is in, or the card alone. */
+  targets: ProjectRecord[];
+  /** A click, with its modifiers, or Space, without, landed on the card. */
+  onSelect: (event?: MouseEvent) => void;
+  /** A right-click landed on the card. */
+  onContextMenu: () => void;
   /** The card was double-clicked, or Open chosen from the menu. */
   onOpen: () => void;
-  /** Delete was pressed on the card, or chosen from the menu. */
+  /** Delete was chosen from the menu, for the targets. */
   onDelete: () => void;
   /** A rename or duplicate changed the projects on disk; the owner refetches its list. */
   onChanged: () => void;
@@ -42,12 +44,14 @@ type DashboardProjectCardProps = {
  * the context menu that opens it (here, in the file manager, or in a code
  * editor), renames, duplicates, and deletes it. Rename
  * happens inline, in place of the name, and lives here so every grid that
- * shows projects gets the same menu.
+ * shows projects gets the same menu. With more than one project selected,
+ * the menu only duplicates and deletes them all.
  */
 export function DashboardProjectCard(props: DashboardProjectCardProps) {
   const [renaming, setRenaming] = createSignal(false);
   const [renameDraft, setRenameDraft] = createSignal("");
   const [editors] = createResource(listEditors, { initialValue: [] });
+  const multiple = () => props.targets.length > 1;
 
   const startRenaming = () => {
     batch(() => {
@@ -86,11 +90,14 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
 
   const handleDuplicate = async () => {
     try {
-      await duplicateProject(props.project.dir);
-      track("project_duplicated");
-      props.onChanged();
+      for (const project of props.targets) {
+        await duplicateProject(project.dir);
+        track("project_duplicated");
+      }
     } catch (e) {
       toast.error("Failed to duplicate project", { description: (e as Error).message });
+    } finally {
+      props.onChanged();
     }
   };
 
@@ -145,7 +152,7 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
     <ContextMenu
       modal={false}
       onOpenChange={(open) => {
-        if (open) props.onSelect();
+        if (open) props.onContextMenu();
       }}
     >
       <ContextMenuTrigger as="div" class="contents">
@@ -153,8 +160,6 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
           active={props.active}
           onClick={props.onSelect}
           onDoubleClick={handleOpen}
-          onEscape={props.onDeselect}
-          onDelete={props.onDelete}
         >
           <DashboardCardPreview>
             <DashboardProjectThumbnail cover={props.project.cover} />
@@ -193,21 +198,32 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
       </ContextMenuTrigger>
       <ContextMenuPortal>
         <ContextMenuContent class="w-45 gap-0">
-          <ContextMenuItem onSelect={handleOpen}>Open</ContextMenuItem>
-          <ContextMenuSeparator class="my-2" />
-          <ContextMenuItem onSelect={handleReveal}>
-            {isWindowsDesktop() ? "Show in Explorer" : "Show in Finder"}
-          </ContextMenuItem>
-          <For each={editors()}>
-            {(editor) => (
-              <ContextMenuItem onSelect={() => handleOpenInEditor(editor)}>Open in {editor.label}</ContextMenuItem>
-            )}
-          </For>
-          <ContextMenuSeparator class="my-2" />
-          <ContextMenuItem onSelect={startRenaming}>Rename</ContextMenuItem>
-          <ContextMenuItem onSelect={handleDuplicate}>Duplicate</ContextMenuItem>
-          <ContextMenuSeparator class="my-2" />
-          <ContextMenuItem onSelect={props.onDelete}>Delete</ContextMenuItem>
+          <Show
+            when={!multiple()}
+            fallback={
+              <>
+                <ContextMenuItem onSelect={handleDuplicate}>Duplicate {props.targets.length} projects</ContextMenuItem>
+                <ContextMenuSeparator class="my-2" />
+                <ContextMenuItem onSelect={props.onDelete}>Delete {props.targets.length} projects</ContextMenuItem>
+              </>
+            }
+          >
+            <ContextMenuItem onSelect={handleOpen}>Open</ContextMenuItem>
+            <ContextMenuSeparator class="my-2" />
+            <ContextMenuItem onSelect={handleReveal}>
+              {isWindowsDesktop() ? "Show in Explorer" : "Show in Finder"}
+            </ContextMenuItem>
+            <For each={editors()}>
+              {(editor) => (
+                <ContextMenuItem onSelect={() => handleOpenInEditor(editor)}>Open in {editor.label}</ContextMenuItem>
+              )}
+            </For>
+            <ContextMenuSeparator class="my-2" />
+            <ContextMenuItem onSelect={startRenaming}>Rename</ContextMenuItem>
+            <ContextMenuItem onSelect={handleDuplicate}>Duplicate</ContextMenuItem>
+            <ContextMenuSeparator class="my-2" />
+            <ContextMenuItem onSelect={props.onDelete}>Delete</ContextMenuItem>
+          </Show>
         </ContextMenuContent>
       </ContextMenuPortal>
     </ContextMenu>

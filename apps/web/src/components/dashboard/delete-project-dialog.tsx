@@ -19,35 +19,40 @@ import type { ProjectInfo } from "@/projects";
 
 
 type DeleteProjectDialogProps = {
-  /** The project being deleted; `null` while the dialog is closed. */
-  project: ProjectInfo | null;
+  /** The projects being deleted; empty while the dialog is closed. */
+  projects: ProjectInfo[];
   /** Asked for whenever the dialog should close, confirmed or not. */
   onClose(): void;
-  /** The project is in the Trash — for the list that showed it to catch up. */
-  onDeleted(project: ProjectInfo): void;
+  /** The projects are in the Trash — for the list that showed them to catch up. */
+  onDeleted(projects: ProjectInfo[]): void;
 };
 
 /**
- * The confirmation a project's deletion goes through. The view holds which
- * project is pending and renders this on it; the delete itself, and being
+ * The confirmation a deletion of projects goes through. The view holds which
+ * projects are pending and renders this on them; the delete itself, and being
  * unclosable while it runs, are the dialog's own.
  */
 export function DeleteProjectDialog(props: DeleteProjectDialogProps) {
   const [deleting, setDeleting] = createSignal(false);
+  const multiple = () => props.projects.length > 1;
 
   const confirm = async () => {
-    const project = props.project;
-    if (!project || deleting()) return;
+    const projects = props.projects;
+    if (projects.length === 0 || deleting()) return;
 
     setDeleting(true);
+    const deleted: ProjectInfo[] = [];
     try {
-      await trashProject(project);
-      props.onDeleted(project);
+      for (const project of projects) {
+        await trashProject(project);
+        deleted.push(project);
+      }
     } catch (e) {
       toast.error("Failed to delete project", {
         description: (e as Error).message,
       });
     } finally {
+      if (deleted.length > 0) props.onDeleted(deleted);
       setDeleting(false);
       props.onClose();
     }
@@ -55,17 +60,18 @@ export function DeleteProjectDialog(props: DeleteProjectDialogProps) {
 
   return (
     <AlertDialog
-      open={props.project !== null}
+      open={props.projects.length > 0}
       onOpenChange={(open) => {
         if (!open && !deleting()) props.onClose();
       }}
     >
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete project</AlertDialogTitle>
+          <AlertDialogTitle>{multiple() ? `Delete ${props.projects.length} projects` : "Delete project"}</AlertDialogTitle>
           <AlertDialogDescription>
-            {`"${props.project?.displayName ?? ""}" will be moved to the Trash. `}
-            You can restore it from there until the Trash is emptied.
+            {multiple()
+              ? `${props.projects.length} projects will be moved to the Trash. You can restore them from there until the Trash is emptied.`
+              : `"${props.projects[0]?.displayName ?? ""}" will be moved to the Trash. You can restore it from there until the Trash is emptied.`}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

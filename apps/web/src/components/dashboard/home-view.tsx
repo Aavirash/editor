@@ -55,6 +55,7 @@ import {
 
 import { DeleteProjectDialog } from "./delete-project-dialog";
 import { DashboardProjectCard } from "./project-card";
+import { createProjectSelection } from "./selection";
 import {
   DashboardCardButton,
   DashboardCardMeta,
@@ -80,8 +81,8 @@ type PromptTarget =
  */
 const RECENT_CARD_WIDTH_PX = 180;
 const RECENT_MIN_COLUMNS = 2;
-/** The grid's `gap-x-0.5`. */
-const RECENT_GAP_PX = 2;
+/** The grid's `gap-x-1.5`. */
+const RECENT_GAP_PX = 6;
 
 /** Recent projects the target menu offers before it gets unwieldy. */
 const MENU_PROJECTS = 8;
@@ -105,9 +106,6 @@ export function DashboardHomeView() {
 
   const [prompt, setPrompt] = createSignal("");
   const [target, setTarget] = createSignal<PromptTarget>({ kind: "new" });
-  const [selectedProject, setSelectedProject] = createSignal<string | null>(
-    null,
-  );
   const [busy, setBusy] = createSignal(false);
   const [attachments, setAttachments] = createSignal<Attachment[]>([]);
 
@@ -153,6 +151,8 @@ export function DashboardHomeView() {
       (a, b) => parseTimestamp(b.modifiedAt) - parseTimestamp(a.modifiedAt),
     ),
   );
+  /** The recents that fit the row, beside the new-project card. */
+  const visibleRecents = createMemo(() => recentProjects().slice(0, recentColumns() - 1));
 
   const targetLabel = () => {
     const current = target();
@@ -233,16 +233,20 @@ export function DashboardHomeView() {
     void handleSubmit();
   };
 
+  const [pendingDelete, setPendingDelete] = createSignal<ProjectInfo[]>([]);
+
+  const selection = createProjectSelection({
+    projects: visibleRecents,
+    grid: recentGrid,
+    onDelete: setPendingDelete,
+  });
+
   // Anything outside a card clears the selection — the grid's gaps, the space
   // around it, and the composer above it. A click on a card is that card's.
-  const clearSelection = createBackgroundClickHandler(() =>
-    setSelectedProject(null),
-  );
+  const clearSelection = createBackgroundClickHandler(selection.clear);
 
-  const [pendingDelete, setPendingDelete] = createSignal<ProjectInfo | null>(null);
-
-  const handleDeleted = (project: ProjectInfo) => {
-    setSelectedProject((current) => (current === project.dir ? null : current));
+  const handleDeleted = () => {
+    selection.clear();
     refetchProjects();
   };
 
@@ -260,7 +264,7 @@ export function DashboardHomeView() {
     try {
       const project = await createNewProject();
       if (!project) return;
-      setSelectedProject(null);
+      selection.clear();
       refetchProjects();
       openProject(project);
     } catch (e) {
@@ -425,7 +429,7 @@ export function DashboardHomeView() {
             <div
               ref={setRecentGrid}
               data-slot="card-grid"
-              class="grid items-start gap-x-0.5 gap-y-3"
+              class="grid items-start gap-x-1.5 gap-y-3"
               style={{ "grid-template-columns": `repeat(${recentColumns()}, minmax(0, 1fr))` }}
             >
               <DashboardCardButton onClick={handleCreateProject}>
@@ -437,15 +441,16 @@ export function DashboardHomeView() {
                 </DashboardCardPreview>
                 <DashboardCardMeta title="New project" />
               </DashboardCardButton>
-              <For each={recentProjects().slice(0, recentColumns() - 1)}>
+              <For each={visibleRecents()}>
                 {(project) => (
                   <DashboardProjectCard
                     project={project}
-                    active={selectedProject() === project.dir}
-                    onSelect={() => setSelectedProject(project.dir)}
-                    onDeselect={() => setSelectedProject(null)}
+                    active={selection.isSelected(project)}
+                    targets={selection.targets(project)}
+                    onSelect={(event) => selection.click(project, event)}
+                    onContextMenu={() => selection.contextMenu(project)}
                     onOpen={() => openProject(project)}
-                    onDelete={() => setPendingDelete(project)}
+                    onDelete={() => setPendingDelete(selection.targets(project))}
                     onChanged={refetchProjects}
                   />
                 )}
@@ -456,8 +461,8 @@ export function DashboardHomeView() {
       </div>
 
       <DeleteProjectDialog
-        project={pendingDelete()}
-        onClose={() => setPendingDelete(null)}
+        projects={pendingDelete()}
+        onClose={() => setPendingDelete([])}
         onDeleted={handleDeleted}
       />
     </>

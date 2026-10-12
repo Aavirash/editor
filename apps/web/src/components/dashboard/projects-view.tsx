@@ -24,6 +24,7 @@ import {
 } from "./shared";
 import { DeleteProjectDialog } from "./delete-project-dialog";
 import { DashboardProjectCard } from "./project-card";
+import { createProjectSelection } from "./selection";
 import { parseTimestamp } from "./utils";
 import { DashboardSearchPanel } from "./search-bar";
 import { projectRoute, useReturnHere } from "@/hooks/use-project-route";
@@ -44,9 +45,9 @@ export function DashboardProjectsView() {
   const [search, setSearch] = createSignal("");
   const [sort, setSort] = createSignal<ProjectSortOption>("last-viewed");
   const [projects, { refetch: refetchProjects }] = createResource(projectsRevision, () => listProjects());
-  const [selectedProject, setSelectedProject] = createSignal<string | null>(null);
   const [creating, setCreating] = createSignal(false);
-  const [pendingDelete, setPendingDelete] = createSignal<ProjectInfo | null>(null);
+  const [pendingDelete, setPendingDelete] = createSignal<ProjectInfo[]>([]);
+  const [grid, setGrid] = createSignal<HTMLDivElement>();
 
   const selectedSortOption = () =>
     SORT_OPTIONS.find((option) => option.id === sort()) ?? SORT_OPTIONS[0];
@@ -79,6 +80,12 @@ export function DashboardProjectsView() {
     return entries;
   });
 
+  const selection = createProjectSelection({
+    projects: sortedProjects,
+    grid,
+    onDelete: setPendingDelete,
+  });
+
   const openProject = async (project: ProjectInfo) => {
     const found = await openProjectFromList(project);
     if (!found) return;
@@ -86,8 +93,8 @@ export function DashboardProjectsView() {
     navigate(projectRoute(projectKey(found)), { state: returnHere() });
   };
 
-  const handleDeleted = (project: ProjectInfo) => {
-    setSelectedProject((current) => (current === project.dir ? null : current));
+  const handleDeleted = () => {
+    selection.clear();
     refetchProjects();
   };
 
@@ -119,7 +126,8 @@ export function DashboardProjectsView() {
       <DashboardViewSection
         class="pb-4"
         title="Recent projects"
-        onBackgroundClick={() => setSelectedProject(null)}
+        onBackgroundClick={selection.clear}
+        gridRef={setGrid}
         controls={
           <>
             <Select<(typeof SORT_OPTIONS)[number]>
@@ -159,11 +167,12 @@ export function DashboardProjectsView() {
           {(project) => (
             <DashboardProjectCard
               project={project}
-              active={selectedProject() === project.dir}
-              onSelect={() => setSelectedProject(project.dir)}
-              onDeselect={() => setSelectedProject(null)}
+              active={selection.isSelected(project)}
+              targets={selection.targets(project)}
+              onSelect={(event) => selection.click(project, event)}
+              onContextMenu={() => selection.contextMenu(project)}
               onOpen={() => openProject(project)}
-              onDelete={() => setPendingDelete(project)}
+              onDelete={() => setPendingDelete(selection.targets(project))}
               onChanged={refetchProjects}
             />
           )}
@@ -171,8 +180,8 @@ export function DashboardProjectsView() {
       </DashboardViewSection>
 
       <DeleteProjectDialog
-        project={pendingDelete()}
-        onClose={() => setPendingDelete(null)}
+        projects={pendingDelete()}
+        onClose={() => setPendingDelete([])}
         onDeleted={handleDeleted}
       />
     </DashboardSearchPanel>
