@@ -12,7 +12,6 @@ import {
 	findProjectRecords,
 	forgetProject as forgetProjectRecord,
 	listProjectRecords,
-	moveProjectRecord,
 	rememberProject,
 	updateProjectRecord,
 } from '@/lib/db';
@@ -234,17 +233,11 @@ export async function getProject(dir: string): Promise<ProjectInfo | null> {
 	return mainBridge.call(MAIN_CHANNELS.PROJECTS_GET, { dir });
 }
 
-/**
- * Renames the project: `displayName` in the record, and the folder with it.
- * The folder moves, so the answer says where the project now lives — hold on
- * to it. Its id has not changed, and neither has its URL; the list follows
- * the folder.
- */
+/** Renames the project: `displayName` in the record. The folder keeps its name. */
 export async function renameProject(dir: string, displayName: string): Promise<ProjectInfo> {
 	if (!dir) throw new Error('No project folder.');
 
 	const project = await mainBridge.call(MAIN_CHANNELS.PROJECTS_RENAME, { dir, displayName });
-	await moveProjectRecord(dir, project.dir);
 	await remember(project);
 	return project;
 }

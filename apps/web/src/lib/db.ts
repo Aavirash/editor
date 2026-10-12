@@ -193,22 +193,6 @@ export async function findProjectRecords(ref: string): Promise<ProjectRecord[]> 
 }
 
 /**
- * Re-keys the record for `from` to `to`, for a project whose folder moved
- * (renaming one moves its folder). Nothing to do when `from` is not on record.
- */
-export async function moveProjectRecord(from: string, to: string): Promise<void> {
-  if (from === to) return;
-  const db = await dbPromise;
-  const tx = db.transaction('projects', 'readwrite');
-  const existing = await tx.store.get(from);
-  if (existing) {
-    await tx.store.delete(from);
-    await tx.store.put({ ...existing, dir: to });
-  }
-  await tx.done;
-}
-
-/**
  * Records `cover` as the picture of the project in `dir`, replacing the one
  * before it. Nothing to do when the project is not on record: one deleted
  * while its cover was still being taken is not put back.

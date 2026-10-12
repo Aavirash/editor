@@ -6,7 +6,7 @@ import { app, dialog, shell, type BrowserWindow } from "electron";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { watch, type FSWatcher } from "node:fs";
-import { cp, mkdir, readdir, readFile, realpath, rename, rm, stat } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { nanoid } from "nanoid";
@@ -98,7 +98,8 @@ async function writePackage(dir: string, pkg: PackageJson): Promise<void> {
 // Identity
 
 // A project is named twice: `displayName` is what the user calls it and the
-// folder is what the disk calls it, and renaming moves both. Neither can be
+// folder is what the disk calls it, and either can change apart from the
+// other (the app renames the one, the user moves the other). Neither can be
 // the project's identity, so the record carries an id that nothing renames —
 // it is what the app's URLs point at, and what the editor keys the open world
 // by. Top level rather than inside `diffusion`, which `writeConfig` replaces
@@ -757,48 +758,17 @@ export async function createProject(root: string, displayName: string): Promise<
 }
 
 /**
- * Renames the project: the human name in the record, and the folder with it,
- * so what the user sees in Finder keeps matching what they see in the app.
- * This is the only thing here that moves a folder — nothing syncs the two
- * behind the user's back — and it costs the project neither its identity nor
- * its links, both of which are the id.
+ * Renames the project: the human name in the record, and nothing else. The
+ * folder keeps its name — moving it is the user's to do, by hand — and the id
+ * the project goes by is untouched either way.
  */
 export async function renameProject(dir: string, displayName: string): Promise<ProjectInfo> {
   const pkg = (await readPackage(dir)) ?? packageJson(basename(dir), displayName);
-  const name = displayName.trim() || basename(dir);
-  await writePackage(dir, { ...pkg, displayName: name });
+  await writePackage(dir, { ...pkg, displayName: displayName.trim() || basename(dir) });
 
-  const project = await describe(await renameFolder(dir, name));
+  const project = await describe(dir);
   if (!project) throw new Error("Not a project folder.");
   return project;
-}
-
-/**
- * Moves the project folder to match `displayName`; answers where it ended up.
- * Best effort by design: the folder can be locked, open elsewhere, or on a
- * volume that will not have it, and none of that should cost the user the
- * name they just typed.
- */
-async function renameFolder(dir: string, displayName: string): Promise<string> {
-  const root = dirname(dir);
-  const base = folderName(displayName);
-  const current = basename(dir);
-  // Already named after it, numbered suffix and all: moving `my-clip-2` to
-  // `my-clip` (or to `my-clip-3`) shuffles folders that are equally right.
-  if (current === base || (current.startsWith(`${base}-`) && /^\d+$/.test(current.slice(base.length + 1)))) {
-    return dir;
-  }
-
-  try {
-    const target = join(root, await freeFolder(root, base));
-    // The watcher holds the old path, and the renderer re-watches the new one
-    // as soon as it hears where the project went.
-    unwatchProject(dir);
-    await rename(dir, target);
-    return target;
-  } catch {
-    return dir;
-  }
 }
 
 /** Copies the folder next to itself as `<name>-copy` (numbered when taken). */
@@ -811,9 +781,7 @@ export async function duplicateProject(dir: string): Promise<ProjectInfo> {
 
   await cp(dir, target, { recursive: true, errorOnExist: true, force: false });
   // The record came along with everything else, id included, and two folders
-  // answering to one id is the thing the id exists to prevent. The folder is
-  // already named for the copy, so the record is written here rather than
-  // through `renameProject` (which would move it again).
+  // answering to one id is the thing the id exists to prevent.
   const pkg = await readPackage(target);
   await writePackage(target, {
     ...(pkg ?? packageJson(basename(target), source.displayName)),

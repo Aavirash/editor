@@ -32,11 +32,7 @@ type DashboardProjectCardProps = {
   onOpen: () => void;
   /** Delete was pressed on the card, or chosen from the menu. */
   onDelete: () => void;
-  /**
-   * A rename or duplicate changed the projects on disk; the owner refetches
-   * its list. Called after a rename regardless of outcome, since the folder
-   * moves with the name and the list is stale either way.
-   */
+  /** A rename or duplicate changed the projects on disk; the owner refetches its list. */
   onChanged: () => void;
 };
 
@@ -94,7 +90,6 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
 
   const handleBlurRenameInput = () => {
     stopRenaming();
-    props.onChanged();
   };
 
   const handleKeyDownRenameInput = async (event: KeyboardEvent) => {
@@ -106,7 +101,6 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
       event.stopPropagation();
 
       stopRenaming();
-      props.onChanged();
       input.blur();
     }
 
@@ -114,18 +108,16 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
       event.preventDefault();
       event.stopPropagation();
 
-      // The folder moves with the name, so the list is refetched rather than
-      // patched: every path in it has just changed.
       if (trimmedName.length > 0 && renaming()) {
         try {
           await renameProject(props.project.dir, trimmedName);
+          props.onChanged();
         } catch (e) {
           toast.error("Failed to rename project", { description: (e as Error).message });
         }
       }
 
       stopRenaming();
-      props.onChanged();
       input.blur();
     }
   };

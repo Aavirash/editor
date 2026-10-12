@@ -46,11 +46,7 @@ export function ProjectPage() {
   });
 
   return (
-    /**
-     * keyed so the engine provider is remounted when the project changes —
-     * on the project, not on its folder: renaming one must not tear down the
-     * world the user is working in.
-     */
+    /** keyed so the engine provider is remounted when the project changes. */
     <Show when={!project.loading}>
       <Show when={project()} keyed fallback={<Navigate href="/" />}>
         {(found) => (

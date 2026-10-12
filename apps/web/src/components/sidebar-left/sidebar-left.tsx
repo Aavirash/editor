@@ -121,8 +121,6 @@ function ProjectNameInput(props: ProjectNameInputProps) {
       const input = event.currentTarget;
       const trimmedName = projectNameDraft()?.trim() ?? "";
 
-      // The rename the folder follows: the project keeps its id, so the URL
-      // and the open editor are untouched by the move.
       if (trimmedName.length > 0 && trimmedName !== project.name()) {
         try {
           await project.rename(trimmedName);

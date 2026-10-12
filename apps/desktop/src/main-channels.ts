@@ -255,7 +255,7 @@ export type MainRequestMap = {
     request: { root: string; displayName: string };
     response: ProjectInfo;
   };
-  // Renames the project: `displayName` in the record, and the folder with it.
+  // Renames the project: `displayName` in the record. The folder is left alone.
   [MAIN_CHANNELS.PROJECTS_RENAME]: {
     request: { dir: string; displayName: string };
     response: ProjectInfo;
