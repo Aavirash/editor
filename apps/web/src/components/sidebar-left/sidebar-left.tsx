@@ -9,7 +9,9 @@ import { useEditorApi } from "@/dapi";
 import { createSignal, Show } from "solid-js";
 import { toast } from "somoto";
 import { Button } from "../ui/button";
+import { badgeVariants } from "../ui/badge";
 import { Icon } from "../ui/icon";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { ProjectMenu } from "./project-menu";
 import { useProject } from "@/context/project";
 import { cx } from "@/lib/cva";
@@ -85,10 +87,11 @@ export function EditorTitleBar(props: EditorTitleBarProps) {
       }
     >
       <div
-        class="absolute left-1/2 top-1/2 flex max-w-[30%] -translate-x-1/2 -translate-y-1/2"
+        class="absolute left-1/2 top-1/2 flex max-w-[30%] -translate-x-1/2 -translate-y-1/2 items-center gap-1.5"
         style="-webkit-app-region: no-drag;"
       >
         <ProjectNameInput class="ml-0 w-auto min-w-8 max-w-full field-sizing-content text-center" />
+        <DraftBadge />
       </div>
     </WindowsTitleBar>
   )
@@ -153,6 +156,41 @@ function ProjectNameInput(props: ProjectNameInputProps) {
   )
 }
 
+/**
+ * Marks a project that is still a draft: in the app's drafts folder until it
+ * is saved somewhere. Clicking it saves, the same as ⌘S.
+ */
+function DraftBadge() {
+  const project = useProject();
+
+  const handleSave = async () => {
+    try {
+      await project.save();
+    } catch (e) {
+      toast.error("Failed to save project", { description: (e as Error).message });
+    }
+  };
+
+  return (
+    <Show when={project.draft()}>
+      <Tooltip openDelay={600} placement="bottom">
+        <TooltipTrigger
+          as="button"
+          type="button"
+          onClick={handleSave}
+          class={badgeVariants({
+            variant: "secondary",
+            class: "h-5 text-muted-foreground outline-none focus-ring hover:text-foreground",
+          })}
+        >
+          Draft
+        </TooltipTrigger>
+        <TooltipContent shortcut={isWindowsDesktop() ? "Ctrl+S" : "⌘S"}>Save folder</TooltipContent>
+      </Tooltip>
+    </Show>
+  );
+}
+
 type ProjectHeaderProps = {
   class?: string;
 }
@@ -161,8 +199,9 @@ export function ProjectHeader(props: ProjectHeaderProps) {
   return (
     <div class={cx("h-12 shrink-0 flex items-center gap-1 pr-4 pl-2.5", props.class)}>
       <ProjectMenu />
-      <div class="flex items-center w-full">
-        <ProjectNameInput />
+      <div class="flex items-center w-full min-w-0 gap-1.5">
+        <ProjectNameInput class="min-w-0" />
+        <DraftBadge />
       </div>
     </div>
   )

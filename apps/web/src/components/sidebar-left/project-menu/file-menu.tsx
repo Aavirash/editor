@@ -15,8 +15,8 @@ import {
 import { useLocation, useNavigate } from "@solidjs/router";
 import { For, Show, createMemo } from "solid-js";
 import { toast } from "somoto";
-import { forgetProjectBundle, generateProjectName } from "@/lib/db";
-import { createProject, deleteProject, duplicateProject, ensureProjectsRoot } from "@/projects";
+import { forgetProjectBundle } from "@/lib/db";
+import { createProject, deleteProject, duplicateProject } from "@/projects";
 import { AssetId, ChildOf, Name, Root, Scene, getAssetFile, getActiveEntity, sortByItemIndex } from "@diffusionstudio/runtime";
 import { assetName } from "@diffusionstudio/assets";
 import { useQuery, useWorld } from "@diffusionstudio/koota-solid";
@@ -38,8 +38,7 @@ export function FileMenu() {
 
   const handleNewProject = async () => {
     try {
-      if (!(await ensureProjectsRoot())) return;
-      const created = await createProject(generateProjectName());
+      const created = await createProject();
       navigate(projectRoute(created.id), { state: location.state });
     } catch (e) {
       toast.error("Failed to create project", {

@@ -45,10 +45,8 @@ import {
 } from "@/agent-chat";
 import { projectRoute, useReturnHere } from "@/hooks/use-project-route";
 import { track } from "@/lib/analytics";
-import { generateProjectName } from "@/lib/db";
 import {
   createProject,
-  ensureProjectsRoot,
   isDesktop,
   listProjects,
   openProjectFolder,
@@ -194,10 +192,7 @@ export function DashboardHomeView() {
     if (current.kind === "project") return openProjectFromList(current.project);
     if (current.kind === "folder") return openProjectFolder(current.dir);
 
-    // Waits for the roots to come back from the database, and asks for one
-    // when there is none to wait for.
-    if (!(await ensureProjectsRoot())) return null;
-    return createProject(generateProjectName());
+    return createProject();
   };
 
   const handleSubmit = async () => {

@@ -26,7 +26,6 @@ import { DeleteProjectDialog } from "./delete-project-dialog";
 import { DashboardProjectCard } from "./project-card";
 import { parseTimestamp } from "./utils";
 import { DashboardSearchPanel } from "./search-bar";
-import { DashboardProjectsFolderBar } from "./projects-folder-bar";
 import { projectRoute, useReturnHere } from "@/hooks/use-project-route";
 import { Icon } from "../ui/icon";
 import { track } from "@/lib/analytics";
@@ -170,7 +169,6 @@ export function DashboardProjectsView() {
           )}
         </For>
       </DashboardViewSection>
-      <DashboardProjectsFolderBar />
 
       <DeleteProjectDialog
         project={pendingDelete()}

@@ -23,6 +23,7 @@ import { useEditorApi } from "@/dapi";
 import { desktopAppPlatformLabel, downloadDesktopApp } from "@/lib/desktop-app";
 import type { ProjectRouteState } from "@/hooks/use-project-route";
 import { FileMenu } from "./file-menu";
+import { FolderMenu } from "./folder-menu";
 import { EditMenu } from "./edit-menu";
 import { ViewMenu } from "./view-menu";
 import { ToolMenu } from "./tool-menu";
@@ -91,6 +92,15 @@ export function ProjectMenu() {
                 <DropdownMenuPortal>
                   <DropdownMenuSubContent class="w-[196px]">
                     <FileMenu />
+                  </DropdownMenuSubContent>
+                </DropdownMenuPortal>
+              </DropdownMenuSub>
+
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>Folder</DropdownMenuSubTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuSubContent class="w-[196px]">
+                    <FolderMenu />
                   </DropdownMenuSubContent>
                 </DropdownMenuPortal>
               </DropdownMenuSub>

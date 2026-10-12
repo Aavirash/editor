@@ -44,14 +44,13 @@ export const MAIN_CHANNELS = {
   FILE_WRITE_CLOSE: "file:write-close",
   FILE_WRITE_ABORT: "file:write-abort",
   LOGS_GET: "logs:get",
-  PROJECTS_PICK_ROOT: "projects:pick-root",
   PROJECTS_PICK_FOLDER: "projects:pick-folder",
-  PROJECTS_DEFAULT_ROOT: "projects:default-root",
-  PROJECTS_SCAN: "projects:scan",
   PROJECTS_GET: "projects:get",
   PROJECTS_INIT: "projects:init",
   PROJECTS_RESOLVE: "projects:resolve",
   PROJECTS_CREATE: "projects:create",
+  PROJECTS_PICK_SAVE: "projects:pick-save",
+  PROJECTS_SAVE: "projects:save",
   PROJECTS_RENAME: "projects:rename",
   PROJECTS_DUPLICATE: "projects:duplicate",
   PROJECTS_DELETE: "projects:delete",
@@ -93,7 +92,7 @@ export type ProjectInfo = {
    * since — `PROJECTS_RESOLVE` is what gives one out.
    */
   id: string;
-  /** Folder name. Renaming the project moves it, so it is not the identity. */
+  /** Folder name. The user can move or rename it, so it is not the identity. */
   name: string;
   /** Human name from package.json `displayName` (falls back to the folder name). */
   displayName: string;
@@ -105,6 +104,11 @@ export type ProjectInfo = {
   modifiedAt: string;
   /** birthtime of the folder, ISO string. */
   createdAt: string;
+  /**
+   * Whether the folder is a draft's: in the app's drafts folder, named after
+   * the id, until the user saves it somewhere of their choosing.
+   */
+  draft: boolean;
 };
 
 export type CompileResult =
@@ -221,23 +225,9 @@ export type MainRequestMap = {
     response: void;
   };
   [MAIN_CHANNELS.LOGS_GET]: { request: void; response: LogEntry[] };
-  [MAIN_CHANNELS.PROJECTS_PICK_ROOT]: {
-    request: void;
-    response: string | null;
-  };
   [MAIN_CHANNELS.PROJECTS_PICK_FOLDER]: {
     request: void;
     response: string | null;
-  };
-  [MAIN_CHANNELS.PROJECTS_DEFAULT_ROOT]: {
-    request: void;
-    response: string | null;
-  };
-  // Every project folder directly under `root`: what the app puts on its
-  // list when `root` is chosen as the projects root.
-  [MAIN_CHANNELS.PROJECTS_SCAN]: {
-    request: { root: string };
-    response: ProjectInfo[];
   };
   [MAIN_CHANNELS.PROJECTS_GET]: {
     request: { dir: string };
@@ -251,11 +241,19 @@ export type MainRequestMap = {
     request: { dir: string };
     response: ProjectInfo | null;
   };
+  // A new project, as a draft called "Untitled" until it is saved.
   [MAIN_CHANNELS.PROJECTS_CREATE]: {
-    request: { root: string; displayName: string };
+    request: void;
     response: ProjectInfo;
   };
-  // Renames the project: `displayName` in the record. The folder is left alone.
+  [MAIN_CHANNELS.PROJECTS_PICK_SAVE]: {
+    request: { dir: string; displayName: string; startIn: string | null };
+    response: string | null;
+  };
+  [MAIN_CHANNELS.PROJECTS_SAVE]: {
+    request: { dir: string; target: string };
+    response: ProjectInfo;
+  };
   [MAIN_CHANNELS.PROJECTS_RENAME]: {
     request: { dir: string; displayName: string };
     response: ProjectInfo;

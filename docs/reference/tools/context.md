@@ -22,7 +22,7 @@ One JSON object:
 
 ```ts
 {
-  rootDir:      string | null;   // absolute folder projects live under; null until one is picked
+  rootDir:      string | null;   // absolute folder the last project was saved to; null until one has been saved
   projectDir:   string | null;   // absolute open project folder — where the JSX being edited lives; null when none is open
   currentTime:  number | null;   // playhead in the active scene, in seconds; null if no scene is active
   fontFamilies: string[];        // families registered in the running world, valid as `fontFamily`
@@ -31,7 +31,7 @@ One JSON object:
 
 With no project open (the app sits at the dashboard) the report is just `{ rootDir, projectDir: null }`: there is no playhead, no world, and no fonts to speak of. Open one with [`open`](./open.md).
 
-`rootDir` is reported whether or not a project is open — it is where a caller with nothing open goes to create or find one.
+`rootDir` is reported whether or not a project is open — it is where a caller with nothing open goes to find one. It is not where the app creates projects: a new project starts as a draft in the app's own folder, and moves when the user saves it (⌘S), which also makes its parent the new `rootDir`.
 
 `currentTime` is local to the active scene, the same origin a clip's `start` and `end` are placed against, and in the same unit.
 
