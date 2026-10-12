@@ -12,6 +12,7 @@
 import type { LogEntry, ScreenshotResult } from "@diffusionstudio/dapi";
 import type { SourceEdit, WriteResult } from "./edit-types";
 import type { AgentId } from "./mcp-config";
+import type { EditorId, EditorInfo } from "./editors";
 
 export const MAIN_WIRE = {
   REQUEST: "main:request",
@@ -30,6 +31,8 @@ export const MAIN_CHANNELS = {
   // Renderer→Main requests
   APP_OPEN_EXTERNAL: "app:open-external",
   APP_SHOW_IN_FOLDER: "app:show-in-folder",
+  APP_EDITORS_LIST: "app:editors-list",
+  APP_OPEN_IN_EDITOR: "app:open-in-editor",
   ANALYTICS_CONFIGURE: "analytics:configure",
   AUTH_GET_PENDING_CALLBACK: "auth:get-pending-callback",
   CHECKOUT_GET_PENDING_CALLBACK: "checkout:get-pending-callback",
@@ -116,6 +119,7 @@ export type CompileResult =
 
 export type { SourceEdit, WriteResult };
 export type { AgentId };
+export type { EditorId, EditorInfo };
 
 // One agent the settings page lists: whether it is set up on this machine,
 // whether its config already carries the app's MCP entry, and — for the
@@ -222,6 +226,15 @@ export type MainRequestMap = {
   // Reveals a file or folder in the OS file manager (Finder on macOS).
   [MAIN_CHANNELS.APP_SHOW_IN_FOLDER]: {
     request: { path: string };
+    response: void;
+  };
+  // The code editors installed here that a folder can be opened in.
+  [MAIN_CHANNELS.APP_EDITORS_LIST]: {
+    request: void;
+    response: EditorInfo[];
+  };
+  [MAIN_CHANNELS.APP_OPEN_IN_EDITOR]: {
+    request: { id: EditorId; dir: string };
     response: void;
   };
   [MAIN_CHANNELS.LOGS_GET]: { request: void; response: LogEntry[] };

@@ -16,6 +16,7 @@ import { cliStatus, installCli, refreshCliShim, uninstallCli } from "./cli-insta
 import { applyMcp, healMcpRegistrations, mcpStatus } from "./mcp-install";
 import { configureAnalytics, countCanvasEdits, startAnalytics, track } from "./analytics";
 import { setupAppMenu } from "./menu";
+import { installedEditors, openInEditor } from "./editors";
 import { AppTray } from "./tray";
 import { WindowHost } from "./window-host";
 import { handleSquirrelEvent } from "./squirrel";
@@ -355,6 +356,8 @@ if (squirrelLaunch) {
 
   mainBridge.handle(MAIN_CHANNELS.APP_OPEN_EXTERNAL, ({ url }) => shell.openExternal(url));
   mainBridge.handle(MAIN_CHANNELS.APP_SHOW_IN_FOLDER, ({ path }) => shell.showItemInFolder(path));
+  mainBridge.handle(MAIN_CHANNELS.APP_EDITORS_LIST, () => installedEditors());
+  mainBridge.handle(MAIN_CHANNELS.APP_OPEN_IN_EDITOR, ({ id, dir }) => openInEditor(id, dir));
   mainBridge.handle(MAIN_CHANNELS.ANALYTICS_CONFIGURE, (config) => configureAnalytics(config));
   mainBridge.handle(MAIN_CHANNELS.AUTH_GET_PENDING_CALLBACK, () =>
     takePendingDeepLink(MAIN_CHANNELS.AUTH_CALLBACK),
