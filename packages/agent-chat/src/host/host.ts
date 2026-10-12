@@ -392,6 +392,16 @@ export class AgentHost {
     if (chat.idleTimer) clearTimeout(chat.idleTimer);
     chat.idleTimer = null;
 
+    // The project's folder moved since the session opened — a draft that was
+    // saved — and the session would go on working in the old one. Closed, it
+    // opens again in the new folder and resumes the same conversation: both
+    // harnesses find a session by its id, wherever it was started.
+    if (chat.session && chat.meta.cwd !== cwd) {
+      const session = chat.session;
+      chat.session = null;
+      await session.close().catch(() => {});
+    }
+
     const turnId = randomUUID();
     const user: Item = { id: `u-${turnId.slice(0, 12)}`, kind: "user", text, ...(attachments.length ? { attachments } : {}) };
     chat.meta = { ...chat.meta, cwd, model: model.model, status: "running", updatedAt: Date.now() };

@@ -281,6 +281,24 @@ describe("agent chat end to end", () => {
     expect(client.state).toBe("open");
   });
 
+  it("reopens the session in the project's new folder and resumes it", async () => {
+    const client = await connect();
+    const draft = { projectId: "moved", cwd: "/tmp/drafts/moved" };
+    const { chatId } = await client.request("turn.send", { ...draft, text: "first", model: MODEL });
+    const chat = follow(client, chatId);
+    await chat.until(idle);
+    const before = fake.sessions.at(-1)!;
+    expect(before.opened.cwd).toBe(draft.cwd);
+
+    await client.request("turn.send", { ...draft, cwd: "/tmp/saved/My Ad", chatId, text: "second", model: MODEL });
+    await chat.until((t) => idle(t) && t.items.filter((item) => item.kind === "assistant").length === 2);
+
+    const after = fake.sessions.at(-1)!;
+    expect(after).not.toBe(before);
+    expect(after.opened.cwd).toBe("/tmp/saved/My Ad");
+    expect(after.opened.resume).toEqual(before.resume);
+  });
+
   it("deletes a chat and drops it from the list", async () => {
     const client = await connect();
     const { chatId } = await client.request("turn.send", { ...PROJECT, text: "bye", model: MODEL });
