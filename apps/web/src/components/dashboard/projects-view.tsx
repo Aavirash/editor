@@ -155,7 +155,7 @@ export function DashboardProjectsView() {
           </DashboardCardPreview>
           <DashboardCardMeta title="New project" />
         </DashboardCardButton>
-        <For each={sortedProjects().slice(0, MAX_VISIBLE_PROJECTS)}>
+        <For each={sortedProjects()}>
           {(project) => (
             <DashboardProjectCard
               project={project}
@@ -184,5 +184,3 @@ const SORT_OPTIONS: Array<{ id: ProjectSortOption; label: string }> = [
   { id: "alphabetical", label: "Alphabetical" },
   { id: "date-created", label: "Date created" },
 ];
-
-const MAX_VISIBLE_PROJECTS = 11;
