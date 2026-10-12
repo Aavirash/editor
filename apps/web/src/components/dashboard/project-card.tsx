@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { Show, batch, createSignal } from "solid-js";
+import { For, Show, batch, createResource, createSignal } from "solid-js";
 import { toast } from "somoto";
 
 import {
@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/context-menu";
 import { TextField, TextFieldInput } from "@/components/ui/text-field";
 import { track } from "@/lib/analytics";
-import { duplicateProject, renameProject, type ProjectRecord } from "@/projects";
+import { listEditors, openInEditor, revealPath, type EditorInfo } from "@/lib/shell";
+import { duplicateProject, isWindowsDesktop, renameProject, type ProjectRecord } from "@/projects";
 
 import { DashboardCardButton, DashboardCardPreview, DashboardProjectThumbnail } from "./shared";
 import { formatEditedAt } from "./utils";
@@ -38,13 +39,15 @@ type DashboardProjectCardProps = {
 
 /**
  * A project in a dashboard grid: thumbnail, name, and last-edited time, with
- * the context menu that opens, renames, duplicates, and deletes it. Rename
+ * the context menu that opens it (here, in the file manager, or in a code
+ * editor), renames, duplicates, and deletes it. Rename
  * happens inline, in place of the name, and lives here so every grid that
  * shows projects gets the same menu.
  */
 export function DashboardProjectCard(props: DashboardProjectCardProps) {
   const [renaming, setRenaming] = createSignal(false);
   const [renameDraft, setRenameDraft] = createSignal("");
+  const [editors] = createResource(listEditors, { initialValue: [] });
 
   const startRenaming = () => {
     batch(() => {
@@ -63,6 +66,22 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
   const handleOpen = () => {
     if (renaming()) return;
     props.onOpen();
+  };
+
+  const handleReveal = async () => {
+    try {
+      await revealPath(props.project.dir);
+    } catch (e) {
+      toast.error("Failed to show the folder", { description: (e as Error).message });
+    }
+  };
+
+  const handleOpenInEditor = async (editor: EditorInfo) => {
+    try {
+      await openInEditor(editor.id, props.project.dir);
+    } catch (e) {
+      toast.error(`Failed to open in ${editor.label}`, { description: (e as Error).message });
+    }
   };
 
   const handleDuplicate = async () => {
@@ -175,6 +194,15 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
       <ContextMenuPortal>
         <ContextMenuContent class="w-45 gap-0">
           <ContextMenuItem onSelect={handleOpen}>Open</ContextMenuItem>
+          <ContextMenuSeparator class="my-2" />
+          <ContextMenuItem onSelect={handleReveal}>
+            {isWindowsDesktop() ? "Show in Explorer" : "Show in Finder"}
+          </ContextMenuItem>
+          <For each={editors()}>
+            {(editor) => (
+              <ContextMenuItem onSelect={() => handleOpenInEditor(editor)}>Open in {editor.label}</ContextMenuItem>
+            )}
+          </For>
           <ContextMenuSeparator class="my-2" />
           <ContextMenuItem onSelect={startRenaming}>Rename</ContextMenuItem>
           <ContextMenuItem onSelect={handleDuplicate}>Duplicate</ContextMenuItem>

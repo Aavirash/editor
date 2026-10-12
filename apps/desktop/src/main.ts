@@ -28,6 +28,8 @@ import {
   deleteProject,
   duplicateProject,
   getProject,
+  askAboutMissingProject,
+  findMovedProject,
   initProject,
   pickFolder,
   pickSaveLocation,
@@ -388,6 +390,10 @@ if (squirrelLaunch) {
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_GET, ({ dir }) => getProject(dir));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_INIT, ({ dir }) => initProject(mainWindow, dir));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_RESOLVE, ({ dir }) => resolveProject(dir));
+  mainBridge.handle(MAIN_CHANNELS.PROJECTS_FIND_MOVED, ({ dir, id }) => findMovedProject(dir, id));
+  mainBridge.handle(MAIN_CHANNELS.PROJECTS_ASK_MISSING, ({ displayName, dir }) =>
+    askAboutMissingProject(mainWindow, displayName, dir),
+  );
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_CREATE, () => createProject());
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_PICK_SAVE, ({ dir, displayName, startIn }) =>
     pickSaveLocation(mainWindow, dir, displayName, startIn),

@@ -16,10 +16,10 @@ import {
 	updateProjectRecord,
 } from '@/lib/db';
 
-import type { CompileResult, ProjectInfo, SourceEdit, WriteResult } from '@desktop/main-channels';
+import type { CompileResult, MissingProjectChoice, ProjectInfo, SourceEdit, WriteResult } from '@desktop/main-channels';
 import type { ProjectRecord } from '@/lib/db';
 
-export type { CompileResult, ProjectInfo, ProjectRecord, SourceEdit, WriteResult };
+export type { CompileResult, MissingProjectChoice, ProjectInfo, ProjectRecord, SourceEdit, WriteResult };
 
 // The folder the save picker starts in: the parent of the last project
 // saved. One localStorage value, read synchronously. Kept under the key the
@@ -109,6 +109,45 @@ export async function checkProject(project: ProjectInfo): Promise<ProjectInfo | 
 }
 
 /**
+ * Finds `project` again when its folder is gone from where the record says:
+ * renamed in Finder, or moved to a folder next to it. Its record follows it to
+ * the new folder, and the project there comes back; null when it is nowhere
+ * near where it was.
+ */
+export async function relocateProject(project: ProjectInfo): Promise<ProjectInfo | null> {
+	const moved = await mainBridge.call(MAIN_CHANNELS.PROJECTS_FIND_MOVED, { dir: project.dir, id: project.id });
+	if (!moved) return null;
+	await moveProjectRecord(project.dir, moved.dir);
+	await remember(moved);
+	return moved;
+}
+
+/** Tells the user `project`'s folder can't be found, and asks what to do about it. */
+export function askAboutMissingProject(project: ProjectInfo): Promise<MissingProjectChoice> {
+	return mainBridge.call(MAIN_CHANNELS.PROJECTS_ASK_MISSING, { displayName: project.displayName, dir: project.dir });
+}
+
+/**
+ * Asks the user where `project` went, with the folder picker: the project in
+ * the folder they choose, its record moved there. Null when they cancel; an
+ * error when the folder holds no project, or a different one.
+ */
+export async function locateProject(project: ProjectInfo): Promise<ProjectInfo | null> {
+	const dir = await pickProjectFolder();
+	if (!dir) return null;
+
+	const found = await mainBridge.call(MAIN_CHANNELS.PROJECTS_RESOLVE, { dir });
+	if (!found) throw new Error("That folder doesn't hold a project.");
+	// A record from before ids has nothing to compare with: the user's word goes.
+	if (project.id && found.id !== project.id) {
+		throw new Error(`That folder holds a different project ("${found.displayName}").`);
+	}
+	await moveProjectRecord(project.dir, found.dir);
+	await remember(found);
+	return found;
+}
+
+/**
  * Re-reads the project in `dir` and brings its record up to date — for a
  * project whose folder changed while it was open, and for one that is
  * closing, so the dashboard shows what it was last edited as. Null when the
@@ -179,7 +218,9 @@ export async function resolveProject(ref: string): Promise<ProjectInfo | null> {
 	if (!ref || !isDesktop()) return null;
 
 	for (const record of await findProjectRecords(ref)) {
-		const project = await mainBridge.call(MAIN_CHANNELS.PROJECTS_RESOLVE, { dir: record.dir });
+		// A folder renamed or moved since is looked for next to where it was.
+		const project =
+			(await mainBridge.call(MAIN_CHANNELS.PROJECTS_RESOLVE, { dir: record.dir })) ?? (await relocateProject(record));
 		if (!project || (project.id !== ref && project.name !== ref)) continue;
 		// Just opened, and holding an id the record may not have had yet.
 		await rememberProject(project);

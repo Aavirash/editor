@@ -441,6 +441,54 @@ async function confirmCloudLocation(
 }
 
 /**
+ * The project `id` in a folder beside `dir`, which no longer holds it: one
+ * renamed in Finder, or moved to another folder next to it. Found by the id in
+ * its record, which goes wherever the folder goes. Null when no sibling holds
+ * it, or `dir`'s parent is gone too. Reads only.
+ */
+export async function findMovedProject(dir: string, id: string): Promise<ProjectInfo | null> {
+  if (!id) return null;
+  const parent = dirname(dir);
+  let entries;
+  try {
+    entries = await readdir(parent, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    const candidate = join(parent, entry.name);
+    if (recordedId(await readPackage(candidate)) === id) return describe(candidate);
+  }
+  return null;
+}
+
+/** What the user wants done about a project whose folder can't be found. */
+export type MissingProjectChoice = "locate" | "remove" | "cancel";
+
+/** Tells the user the project's folder is gone, and asks what to do about it. */
+export async function askAboutMissingProject(
+  window: BrowserWindow | null,
+  displayName: string,
+  dir: string,
+): Promise<MissingProjectChoice> {
+  const options: Electron.MessageBoxOptions = {
+    type: "warning",
+    message: `Can't find "${displayName}"`,
+    detail: `It was in ${dir}. It may have been moved, renamed or deleted, or be on a disk that isn't connected.`,
+    buttons: ["Locate...", "Remove from List", "Cancel"],
+    defaultId: 0,
+    cancelId: 2,
+  };
+  const { response } = window
+    ? await dialog.showMessageBox(window, options)
+    : await dialog.showMessageBox(options);
+  if (response === 0) return "locate";
+  if (response === 1) return "remove";
+  return "cancel";
+}
+
+/**
  * The project in `dir`, left holding an id — this is where a folder that
  * predates ids, or was made by hand, gets one — so the caller can send the
  * app to that id's URL. What the app calls when it opens a project; null

@@ -13,6 +13,7 @@ import type { LogEntry, ScreenshotResult } from "@diffusionstudio/dapi";
 import type { SourceEdit, WriteResult } from "./edit-types";
 import type { AgentId } from "./mcp-config";
 import type { EditorId, EditorInfo } from "./editors";
+import type { MissingProjectChoice } from "./projects";
 
 export const MAIN_WIRE = {
   REQUEST: "main:request",
@@ -51,6 +52,8 @@ export const MAIN_CHANNELS = {
   PROJECTS_GET: "projects:get",
   PROJECTS_INIT: "projects:init",
   PROJECTS_RESOLVE: "projects:resolve",
+  PROJECTS_FIND_MOVED: "projects:find-moved",
+  PROJECTS_ASK_MISSING: "projects:ask-missing",
   PROJECTS_CREATE: "projects:create",
   PROJECTS_PICK_SAVE: "projects:pick-save",
   PROJECTS_SAVE: "projects:save",
@@ -120,6 +123,7 @@ export type CompileResult =
 export type { SourceEdit, WriteResult };
 export type { AgentId };
 export type { EditorId, EditorInfo };
+export type { MissingProjectChoice };
 
 // One agent the settings page lists: whether it is set up on this machine,
 // whether its config already carries the app's MCP entry, and — for the
@@ -253,6 +257,17 @@ export type MainRequestMap = {
   [MAIN_CHANNELS.PROJECTS_RESOLVE]: {
     request: { dir: string };
     response: ProjectInfo | null;
+  };
+  // The project `id` in a folder beside `dir`, which no longer holds it (a
+  // folder renamed or moved in Finder); null when none does.
+  [MAIN_CHANNELS.PROJECTS_FIND_MOVED]: {
+    request: { dir: string; id: string };
+    response: ProjectInfo | null;
+  };
+  // Asks what to do about a project whose folder can't be found.
+  [MAIN_CHANNELS.PROJECTS_ASK_MISSING]: {
+    request: { displayName: string; dir: string };
+    response: MissingProjectChoice;
   };
   // A new project, as a draft called "Untitled" until it is saved.
   [MAIN_CHANNELS.PROJECTS_CREATE]: {

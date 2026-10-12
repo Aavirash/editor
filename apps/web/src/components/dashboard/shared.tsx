@@ -24,11 +24,14 @@ import { toast } from "somoto";
 import { track } from "@/lib/analytics";
 import { forgetProjectBundle } from "@/lib/db";
 import {
+  askAboutMissingProject,
   checkProject,
   createProject,
   deleteProject,
   forgetProject,
   isDesktop,
+  locateProject,
+  relocateProject,
   type ProjectInfo,
 } from "@/projects";
 
@@ -578,10 +581,11 @@ export async function createNewProject(): Promise<ProjectInfo | null> {
 
 /**
  * The project as its folder holds it now, for opening it from the list: what
- * the list shows is its record, and the folder is only looked at here. Null —
- * with the reason shown, and a way to take the project off the list — when
- * the folder is gone or no longer a project. The list is not touched on its
- * own: a folder on a volume that is not mounted comes back with the volume.
+ * the list shows is its record, and the folder is only looked at here. A
+ * folder renamed or moved next to where it was is found by the project's id,
+ * and the list follows it. Otherwise the user is asked: locate it, take it off
+ * the list, or leave it be — a folder on a volume that is not mounted comes
+ * back with the volume. Null unless there is a project to open.
  */
 export async function openProjectFromList(project: ProjectInfo): Promise<ProjectInfo | null> {
   if (!isDesktop()) return project;
@@ -589,18 +593,27 @@ export async function openProjectFromList(project: ProjectInfo): Promise<Project
   const current = await checkProject(project);
   if (current) return current;
 
-  toast.error(`Could not find ${project.displayName}`, {
-    description: `There is no project at ${project.dir}. It may be on a disk that is not connected.`,
-    action: {
-      label: "Remove from list",
-      onClick: () => {
-        forgetProject(project.dir).catch((e) => {
-          toast.error("Failed to remove project", { description: (e as Error).message });
-        });
-      },
-    },
-  });
-  return null;
+  // Renamed or moved in Finder: found next to where it was, and opened there.
+  const moved = await relocateProject(project);
+  if (moved) return moved;
+
+  const choice = await askAboutMissingProject(project);
+  if (choice === "remove") {
+    try {
+      await forgetProject(project.dir);
+    } catch (e) {
+      toast.error("Failed to remove project", { description: (e as Error).message });
+    }
+    return null;
+  }
+  if (choice !== "locate") return null;
+
+  try {
+    return await locateProject(project);
+  } catch (e) {
+    toast.error(`Could not open ${project.displayName}`, { description: (e as Error).message });
+    return null;
+  }
 }
 
 /**
