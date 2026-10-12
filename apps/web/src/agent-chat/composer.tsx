@@ -103,7 +103,7 @@ export function Composer(props: ComposerProps) {
         placeholder={props.blocked ?? "Do anything"}
         disabled={props.blocked !== null}
         rows={1}
-        class="max-h-40 min-h-7 w-full resize-none overflow-auto bg-transparent p-1 text-[12px] leading-5 text-foreground outline-none placeholder:text-muted-foreground selection:bg-selection selection:text-selection-foreground disabled:cursor-default"
+        class="max-h-40 min-h-7 w-full resize-none overflow-auto bg-transparent p-1 text-xs leading-5 text-foreground outline-none placeholder:text-muted-foreground selection:bg-selection selection:text-selection-foreground disabled:cursor-default"
       />
 
       <div class="flex min-h-4 items-center justify-between gap-1">

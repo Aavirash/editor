@@ -23,7 +23,6 @@ import {
   DropdownMenuGroupLabel,
   DropdownMenuItem,
   DropdownMenuPortal,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
@@ -49,8 +48,6 @@ import {
   createProject,
   isDesktop,
   listProjects,
-  openProjectFolder,
-  pickProjectFolder,
   projectKey,
   projectsRevision,
   type ProjectInfo,
@@ -69,15 +66,12 @@ import {
 import { parseTimestamp } from "./utils";
 
 /**
- * Where the prompt lands: a project chosen from the recents, a folder chosen
- * from the picker — any folder will do, `resolveTarget` makes it a Diffusion
- * Studio project — or, until either is chosen, a fresh project under the
- * application folder.
+ * Where the prompt lands: a project chosen from the recents or, until one is
+ * chosen, a fresh project under the application folder.
  */
 type PromptTarget =
   | { kind: "new" }
-  | { kind: "project"; project: ProjectInfo }
-  | { kind: "folder"; dir: string };
+  | { kind: "project"; project: ProjectInfo };
 
 /**
  * Recents get one row, and as many cards as fit it at about this width — so a
@@ -163,34 +157,19 @@ export function DashboardHomeView() {
   const targetLabel = () => {
     const current = target();
     if (current.kind === "project") return current.project.displayName;
-    if (current.kind === "folder") return folderName(current.dir);
-    return "Choose project";
+    return "";
   };
 
   const canSubmit = () => prompt().trim().length > 0 && !busy() && model() !== null;
 
-  const handlePickFolder = async () => {
-    try {
-      const dir = await pickProjectFolder();
-      if (dir) setTarget({ kind: "folder", dir });
-    } catch (e) {
-      toast.error("Failed to choose folder", {
-        description: (e as Error).message,
-      });
-    }
-  };
-
   /**
-   * The folder the agent will work in. A picked folder is opened as a project,
-   * which scaffolds an entry into it when it is not one already — so any
-   * folder on disk can be the answer, not only a project we made. With none
-   * picked, a fresh project under the application folder.
+   * The folder the agent will work in: the chosen recent project or, with none
+   * chosen, a fresh project under the application folder.
    */
   const resolveTarget = async (): Promise<ProjectInfo | null> => {
     const current = target();
     // A project off the list is its record; the folder is looked at now.
     if (current.kind === "project") return openProjectFromList(current.project);
-    if (current.kind === "folder") return openProjectFolder(current.dir);
 
     return createProject();
   };
@@ -310,32 +289,17 @@ export function DashboardHomeView() {
                 <DropdownMenuTrigger
                   as="button"
                   type="button"
-                  aria-label="Choose the folder to work in"
-                  class="flex h-7 shrink-0 items-center rounded-md pl-0.5 pr-2 text-xs font-450 text-muted-foreground hover:bg-accent"
+                  aria-label="Choose the project to work in"
+                  class="flex h-7 shrink-0 items-center rounded-md px-0.5 gap-0.5 text-xs font-450 text-muted-foreground hover:bg-accent"
                 >
                   <span class="grid size-6 shrink-0 place-items-center overflow-clip">
                     <Icon name="navigation.folder" />
                   </span>
-                  <span class="max-w-60 truncate">{targetLabel()}</span>
-                  <span class="grid h-7 w-5 shrink-0 place-items-center overflow-clip">
-                    <Icon name="chevron-down" />
-                  </span>
+                  <span class="max-w-60 truncate translate-y-px">{targetLabel()}</span>
                 </DropdownMenuTrigger>
                 <DropdownMenuPortal>
                   <DropdownMenuContent class="w-60">
-                    {/* One action, not a new/open pair: the picker takes any
-                        folder, and a folder that is not a project yet becomes
-                        one when the prompt is sent. */}
-                    <DropdownMenuGroup>
-                      <DropdownMenuItem onSelect={handlePickFolder}>
-                        <Icon name="plus-add" />
-                        <span class="min-w-0 flex-1 truncate">
-                          Create project...
-                        </span>
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
                     <Show when={recentProjects().length > 0}>
-                      <DropdownMenuSeparator />
                       <DropdownMenuGroup>
                         <DropdownMenuGroupLabel>
                           Recent projects
@@ -546,14 +510,4 @@ function createFadingPlaceholder(active: () => boolean) {
   onCleanup(() => clearTimeout(timer));
 
   return { line, visible };
-}
-
-/** The last segment of a path, for naming a folder the user picked. */
-function folderName(dir: string): string {
-  return (
-    dir
-      .replace(/[/\\]+$/, "")
-      .split(/[/\\]/)
-      .pop() || dir
-  );
 }
