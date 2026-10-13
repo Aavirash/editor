@@ -186,12 +186,13 @@ export async function createProject(collectionId?: string): Promise<ProjectInfo>
 }
 
 /**
- * Asks where to save the draft in `dir`, starting where the last project was
- * saved: the folder it will become, or null when the user cancels. Moves
- * nothing yet.
+ * Asks where to save the draft in `dir` — or, for `move`, where to move the
+ * saved project there — starting where the last project was saved, with
+ * `name` filled in: the folder it will become, or null when the user cancels.
+ * Moves nothing yet.
  */
-export function pickSaveLocation(dir: string, displayName: string): Promise<string | null> {
-	return mainBridge.call(MAIN_CHANNELS.PROJECTS_PICK_SAVE, { dir, displayName, startIn: saveFolder() });
+export function pickSaveLocation(dir: string, name: string, action: 'save' | 'move' = 'save'): Promise<string | null> {
+	return mainBridge.call(MAIN_CHANNELS.PROJECTS_PICK_SAVE, { dir, name, startIn: saveFolder(), action });
 }
 
 /** The folder `path` is in. */
@@ -205,6 +206,19 @@ const parentOf = (path: string): string => path.replace(/[\\/]+[^\\/]*[\\/]*$/, 
  */
 export async function saveProject(dir: string, target: string): Promise<ProjectInfo> {
 	const project = await mainBridge.call(MAIN_CHANNELS.PROJECTS_SAVE, { dir, target });
+	await moveProjectRecord(dir, project.dir);
+	await remember(project);
+	storeSaveFolder(parentOf(project.dir));
+	return project;
+}
+
+/**
+ * Moves the saved project in `dir` to `target` (from `pickSaveLocation`) and
+ * answers with the project where it now lives; its name stays. The list
+ * follows the folder, as it does a save — and so does the next save picker.
+ */
+export async function moveProject(dir: string, target: string): Promise<ProjectInfo> {
+	const project = await mainBridge.call(MAIN_CHANNELS.PROJECTS_MOVE, { dir, target });
 	await moveProjectRecord(dir, project.dir);
 	await remember(project);
 	storeSaveFolder(parentOf(project.dir));

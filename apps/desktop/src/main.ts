@@ -36,6 +36,7 @@ import {
   renameProject,
   resolveProject,
   saveProject,
+  moveProject,
   unwatchAll,
   listEntries,
   realPathEntry,
@@ -395,10 +396,11 @@ if (squirrelLaunch) {
     askAboutMissingProject(mainWindow, displayName, dir),
   );
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_CREATE, () => createProject());
-  mainBridge.handle(MAIN_CHANNELS.PROJECTS_PICK_SAVE, ({ dir, displayName, startIn }) =>
-    pickSaveLocation(mainWindow, dir, displayName, startIn),
+  mainBridge.handle(MAIN_CHANNELS.PROJECTS_PICK_SAVE, ({ dir, name, startIn, action }) =>
+    pickSaveLocation(mainWindow, dir, name, startIn, action),
   );
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_SAVE, ({ dir, target }) => saveProject(dir, target));
+  mainBridge.handle(MAIN_CHANNELS.PROJECTS_MOVE, ({ dir, target }) => moveProject(dir, target));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_RENAME, ({ dir, displayName }) => renameProject(dir, displayName));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_DUPLICATE, ({ dir }) => duplicateProject(dir));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_DELETE, ({ dir }) => deleteProject(dir).then(deleteProjectChats));

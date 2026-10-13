@@ -20,7 +20,8 @@ vi.mock("electron", () => ({
   ipcMain: { on: () => { } },
 }));
 
-const { createProject, draftsRoot, duplicateProject, readManifest, saveProject, writeManifest } = await import("./projects");
+const { createProject, draftsRoot, duplicateProject, moveProject, readManifest, saveProject, writeManifest } =
+  await import("./projects");
 
 let root: string;
 
@@ -82,5 +83,16 @@ describe("drafts", () => {
 
     const saved = await saveProject(draft.dir, join(root, "saved"));
     await expect(saveProject(saved.dir, join(root, "again"))).rejects.toThrow(/saved already/);
+  });
+
+  it("moves a saved project, keeping its name, and refuses to move a draft", async () => {
+    const draft = await createProject();
+    await expect(moveProject(draft.dir, join(root, "elsewhere"))).rejects.toThrow(/Save the draft/);
+
+    const saved = await saveProject(draft.dir, join(root, "My Ad"));
+    const target = join(root, "Archive", "Ad Folder");
+    const moved = await moveProject(saved.dir, target);
+    expect(moved).toMatchObject({ id: draft.id, dir: target, name: "Ad Folder", displayName: "My Ad", draft: false });
+    expect(await readdir(root)).not.toContain("My Ad");
   });
 });

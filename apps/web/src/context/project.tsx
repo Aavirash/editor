@@ -7,12 +7,13 @@
 // world is under), the folder is where it lives, and the display name is what
 // the user calls it. Resolving the URL to a project happens once, in
 // ProjectPage; this is that answer, kept current as the project is renamed
-// underneath the editor, and as a draft is saved and its folder moves.
+// underneath the editor, and as a draft is saved or a project is moved and its
+// folder goes with it.
 
 import { createContext, createMemo, createSignal, onCleanup, onMount, useContext, type Accessor, type JSX } from 'solid-js';
 import { toast } from 'somoto';
 
-import { pickSaveLocation, refreshProject, renameProject, saveProject } from '@/projects';
+import { moveProject, pickSaveLocation, refreshProject, renameProject, saveProject } from '@/projects';
 
 import type { ProjectInfo } from '@/projects';
 
@@ -35,6 +36,12 @@ export type ProjectContextValue = {
 	 * cancelled.
 	 */
 	save: () => Promise<boolean>;
+	/**
+	 * Moves a saved project: asks where, and moves its folder there. False
+	 * when there was nothing to move (a draft, a move already running) or the
+	 * user cancelled.
+	 */
+	move: () => Promise<boolean>;
 };
 
 const ProjectContext = createContext<ProjectContextValue>();
@@ -49,6 +56,7 @@ export function ProjectProvider(props: { project: ProjectInfo; children: JSX.Ele
 	// flushes what it still owes as it goes — on `dir`, so an empty one lets
 	// go of the folder, and the new one attaches it all again where it went.
 	const [moving, setMoving] = createSignal(false);
+	// One save or move at a time: both move the folder.
 	let saving = false;
 
 	// Memos, not plain reads: a refresh that found nothing new must not look
@@ -89,6 +97,26 @@ export function ProjectProvider(props: { project: ProjectInfo; children: JSX.Ele
 		}
 	};
 
+	const move = async (): Promise<boolean> => {
+		if (draft() || saving) return false;
+		saving = true;
+		try {
+			const from = info().dir;
+			const target = await pickSaveLocation(from, info().name, 'move');
+			if (!target) return false;
+
+			setMoving(true);
+			try {
+				setInfo(await moveProject(from, target));
+			} finally {
+				setMoving(false);
+			}
+			return true;
+		} finally {
+			saving = false;
+		}
+	};
+
 	/** ⌘S saves a draft. A saved project is written as it is edited, so there it does nothing. */
 	const handleShortcut = async (event: KeyboardEvent) => {
 		if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
@@ -107,7 +135,7 @@ export function ProjectProvider(props: { project: ProjectInfo; children: JSX.Ele
 	onCleanup(() => window.removeEventListener('keydown', handleShortcut));
 
 	return (
-		<ProjectContext.Provider value={{ id, dir, draft, name, rename, refresh, save }}>
+		<ProjectContext.Provider value={{ id, dir, draft, name, rename, refresh, save, move }}>
 			{props.children}
 		</ProjectContext.Provider>
 	);

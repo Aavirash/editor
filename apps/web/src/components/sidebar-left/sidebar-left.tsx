@@ -185,7 +185,7 @@ function DraftBadge() {
         >
           Draft
         </TooltipTrigger>
-        <TooltipContent shortcut={isWindowsDesktop() ? "Ctrl+S" : "⌘S"}>Save folder</TooltipContent>
+        <TooltipContent shortcut={isWindowsDesktop() ? "Ctrl+S" : "⌘S"}>Save</TooltipContent>
       </Tooltip>
     </Show>
   );

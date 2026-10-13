@@ -205,7 +205,7 @@ async function defaultSaveFolder(): Promise<string> {
 /** Characters no folder name can hold on one platform or another. */
 const UNSAFE_NAME = /[\\/:*?"<>|]+/g;
 
-/** Why the draft in `dir` cannot be saved as `target`, or null when it can. */
+/** Why the project in `dir` cannot be saved or moved as `target`, or null when it can. */
 async function saveProblem(dir: string, target: string): Promise<string | null> {
   if (await exists(target)) {
     return `"${basename(target)}" already exists in ${basename(dirname(target))}. Choose another name.`;
@@ -216,25 +216,30 @@ async function saveProblem(dir: string, target: string): Promise<string | null> 
   return null;
 }
 
+/** What the save picker is asked for: saving a draft, or moving a saved project. */
+export type SaveAction = "save" | "move";
+
 /**
- * Asks where to save the draft in `dir`: the folder it will become, or null
- * when the user cancels. Starts in `startIn` — the parent of the last
- * project saved — with the project's name filled in. A name that is taken is
- * refused rather than replaced, and a synced folder is warned about; either
- * way the picker comes back, since the user came here to save.
+ * Asks where to save the draft in `dir`, or where to move the project there:
+ * the folder it will become, or null when the user cancels. Starts in
+ * `startIn` — the parent of the last project saved — with `name` filled in.
+ * A name that is taken is refused rather than replaced, and a synced folder
+ * is warned about; either way the picker comes back, since the user came here
+ * to save.
  */
 export async function pickSaveLocation(
   window: BrowserWindow | null,
   dir: string,
-  displayName: string,
+  name: string,
   startIn: string | null,
+  action: SaveAction = "save",
 ): Promise<string | null> {
   const start = startIn && (await stat(startIn).catch(() => null))?.isDirectory() ? startIn : await defaultSaveFolder();
-  const name = displayName.replace(UNSAFE_NAME, "-").trim() || basename(dir);
+  const folder = name.replace(UNSAFE_NAME, "-").trim() || basename(dir);
   const options: Electron.SaveDialogOptions = {
-    title: "Save project",
-    buttonLabel: "Save",
-    defaultPath: join(start, name),
+    title: action === "move" ? "Move project" : "Save project",
+    buttonLabel: action === "move" ? "Move" : "Save",
+    defaultPath: join(start, folder),
     properties: ["createDirectory", "showOverwriteConfirmation"],
   };
 
@@ -247,7 +252,11 @@ export async function pickSaveLocation(
 
     const problem = await saveProblem(dir, filePath);
     if (problem) {
-      const message: Electron.MessageBoxOptions = { type: "warning", message: "Can't save here", detail: problem };
+      const message: Electron.MessageBoxOptions = {
+        type: "warning",
+        message: action === "move" ? "Can't move here" : "Can't save here",
+        detail: problem,
+      };
       if (window) await dialog.showMessageBox(window, message);
       else await dialog.showMessageBox(message);
       continue;
@@ -887,6 +896,25 @@ export async function duplicateProject(dir: string): Promise<ProjectInfo> {
  */
 export async function saveProject(dir: string, target: string): Promise<ProjectInfo> {
   if (!isDraft(dir)) throw new Error("This project is saved already.");
+  await moveFolder(dir, target);
+  return renameProject(target, basename(target));
+}
+
+/**
+ * Moves the saved project in `dir` to `target`, as saving moves a draft —
+ * but it keeps its name, which is the user's already. A draft is saved
+ * rather than moved.
+ */
+export async function moveProject(dir: string, target: string): Promise<ProjectInfo> {
+  if (isDraft(dir)) throw new Error("Save the draft instead of moving it.");
+  await moveFolder(dir, target);
+  const project = await describe(target);
+  if (!project) throw new Error("Failed to move the project.");
+  return project;
+}
+
+/** Moves the project folder `dir` to `target`, once whatever is on its way into it has landed. */
+async function moveFolder(dir: string, target: string): Promise<void> {
   if (!isAbsolute(target)) throw new Error(`The project folder must be an absolute path (got "${target}").`);
   const problem = await saveProblem(dir, target);
   if (problem) throw new Error(problem);
@@ -902,7 +930,6 @@ export async function saveProject(dir: string, target: string): Promise<ProjectI
     await cp(dir, target, { recursive: true, errorOnExist: true, force: false });
     await rm(dir, { recursive: true, force: true });
   }
-  return renameProject(target, basename(target));
 }
 
 /**

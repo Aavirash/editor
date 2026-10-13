@@ -13,7 +13,7 @@ import type { LogEntry, ScreenshotResult } from "@diffusionstudio/dapi";
 import type { SourceEdit, WriteResult } from "./edit-types";
 import type { AgentId } from "./mcp-config";
 import type { EditorId, EditorInfo } from "./editors";
-import type { MissingProjectChoice } from "./projects";
+import type { MissingProjectChoice, SaveAction } from "./projects";
 
 export const MAIN_WIRE = {
   REQUEST: "main:request",
@@ -57,6 +57,7 @@ export const MAIN_CHANNELS = {
   PROJECTS_CREATE: "projects:create",
   PROJECTS_PICK_SAVE: "projects:pick-save",
   PROJECTS_SAVE: "projects:save",
+  PROJECTS_MOVE: "projects:move",
   PROJECTS_RENAME: "projects:rename",
   PROJECTS_DUPLICATE: "projects:duplicate",
   PROJECTS_DELETE: "projects:delete",
@@ -274,11 +275,16 @@ export type MainRequestMap = {
     request: void;
     response: ProjectInfo;
   };
+  // Where to save a draft, or move a saved project; `name` fills the picker.
   [MAIN_CHANNELS.PROJECTS_PICK_SAVE]: {
-    request: { dir: string; displayName: string; startIn: string | null };
+    request: { dir: string; name: string; startIn: string | null; action: SaveAction };
     response: string | null;
   };
   [MAIN_CHANNELS.PROJECTS_SAVE]: {
+    request: { dir: string; target: string };
+    response: ProjectInfo;
+  };
+  [MAIN_CHANNELS.PROJECTS_MOVE]: {
     request: { dir: string; target: string };
     response: ProjectInfo;
   };
