@@ -96,11 +96,11 @@
   --color-meter-red: var(--meter-red);
   --color-meter-clip: var(--meter-clip);
 
-  /** Timeline colors */
-  --color-audio-background: hsla(168, 67%, 17%, 1);
-  --color-audio-primary: hsla(162, 66%, 29%, 1);
-  --color-caption-background: #5F254A;
-  --color-caption-accent: rgba(207, 63, 149, 0.24);
+  /** Timeline colors, mirroring COLORS.clip in engine/timeline/constants.ts */
+  --color-audio-background: #004732;
+  --color-audio-primary: #0DBF8A;
+  --color-caption-background: #7B1E5A;
+  --color-caption-accent: #AA317B;
 }
 
 :root {
