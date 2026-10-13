@@ -5,7 +5,8 @@
 import { basename, dirname } from "@diffusionstudio/assets";
 import { usePromptInput } from "@/context/prompt-input";
 import { restoreConfig } from "@/components/genai/saved-config";
-import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js";
+import { useWorld } from "@diffusionstudio/koota-solid";
 import { SidebarTabs } from "@/agent-chat";
 import { Button } from "../ui/button";
 import { Icon } from "../ui/icon";
@@ -31,12 +32,21 @@ import { LazyAssetItem } from "./asset-item";
 import { FolderItem, handleFolderDrop, isAssetOrFolderDrag, ASSET_DRAG_TYPE, FOLDER_DRAG_TYPE } from "./folder-item";
 import { useLibrary } from "@/engine/library";
 import { useAssetSelection } from "@/engine/hooks";
-import { droppedFiles, importFiles, pickAndImport } from "@/engine/asset-actions";
+import { droppedFiles, importFiles, insertAssetsAtPlayhead, pickAndImport } from "@/engine/asset-actions";
 import { isInputTarget } from "@/utils";
 
 import type { AssetLibrary } from "@diffusionstudio/assets";
 
 /** The ancestors of a folder path, root excluded, nearest last. */
+/**
+ * A grid item's selection key: an asset id or a folder path, told apart by
+ * prefix so the two kinds can share one ordered list.
+ */
+const assetKey = (id: string) => `asset:${id}`;
+const folderKey = (path: string) => `folder:${path}`;
+const isAssetKey = (key: string) => key.startsWith("asset:");
+const keyValue = (key: string) => key.slice(key.indexOf(":") + 1);
+
 function ancestorsOf(path: string): string[] {
   const chain: string[] = [];
   for (let folder = path; folder; folder = dirname(folder)) chain.unshift(folder);
@@ -45,10 +55,12 @@ function ancestorsOf(path: string): string[] {
 
 export function Assets() {
   let root: HTMLDivElement | undefined;
+  let scroller: HTMLDivElement | undefined;
   let dragCounter = 0;
 
+  const world = useWorld();
   const library = useLibrary();
-  const { id: selectedAssetId, select: setSelectedAssetId } = useAssetSelection();
+  const assetSelection = useAssetSelection();
   const { openPromptInput } = usePromptInput();
   const [query, setQuery] = createSignal("");
   const [assetFilter, setAssetFilter] = createSignal<AssetFilter>("ALL");
@@ -86,6 +98,171 @@ export function Assets() {
 
   const itemCount = createMemo(() => visibleFolders().length + filteredAssets().length);
 
+  /** The items in the grid, in its order: folders first, then assets. */
+  const visibleKeys = createMemo(() => [
+    ...visibleFolders().map(folderKey),
+    ...filteredAssets().map((asset) => assetKey(asset.id)),
+  ]);
+
+  const selectedKeys = createMemo(() => new Set([
+    ...assetSelection.folders().map(folderKey),
+    ...assetSelection.ids().map(assetKey),
+  ]));
+
+  const setSelection = (keys: Iterable<string>) => {
+    const unique = [...new Set(keys)];
+    assetSelection.set({
+      ids: unique.filter(isAssetKey).map(keyValue),
+      folders: unique.filter((key) => !isAssetKey(key)).map(keyValue),
+    });
+  };
+
+  // Finder's selection, as the dashboard's project grid has it: where a
+  // Shift range starts, where Shift-arrows move from, and what was selected
+  // before the range — the range is added to that.
+  let anchor: string | null = null;
+  let lead: string | null = null;
+  let base: ReadonlySet<string> = new Set();
+
+  const selectOnly = (key: string) => {
+    setSelection([key]);
+    anchor = lead = key;
+    base = new Set();
+  };
+
+  const toggleSelected = (key: string) => {
+    const next = new Set(selectedKeys());
+    if (!next.delete(key)) next.add(key);
+    setSelection(next);
+    anchor = lead = key;
+    base = new Set([...next].filter((entry) => entry !== key));
+  };
+
+  /** Selects anchor through `key` on top of `base`, or just `key` when the anchor is off the grid. */
+  const selectRangeTo = (key: string) => {
+    const keys = visibleKeys();
+    const from = anchor === null ? -1 : keys.indexOf(anchor);
+    const to = keys.indexOf(key);
+    if (from < 0 || to < 0) return selectOnly(key);
+
+    setSelection([...base, ...keys.slice(Math.min(from, to), Math.max(from, to) + 1)]);
+    lead = key;
+  };
+
+  const selectAll = () => {
+    const keys = visibleKeys();
+    setSelection(keys);
+    anchor = keys[0] ?? null;
+    lead = keys.at(-1) ?? null;
+    base = new Set();
+  };
+
+  const clearSelection = () => {
+    setSelection([]);
+    anchor = lead = null;
+    base = new Set();
+  };
+
+  // Items that leave the grid (another folder opened, filtered out, moved or
+  // deleted) leave the selection, so keys never act on what is not in view.
+  createEffect(() => {
+    const visible = new Set(visibleKeys());
+    const selected = untrack(selectedKeys);
+    const kept = [...selected].filter((key) => visible.has(key));
+    if (kept.length !== selected.size) setSelection(kept);
+  });
+
+  const handleItemClick = (key: string, event: MouseEvent) => {
+    if (event.shiftKey) selectRangeTo(key);
+    else if (event.metaKey || event.ctrlKey) toggleSelected(key);
+    else selectOnly(key);
+    root?.focus();
+  };
+
+  /** A right-click keeps a selection it lands in, like Finder; elsewhere it selects the item alone. */
+  const handleItemContextMenu = (key: string) => {
+    if (!selectedKeys().has(key)) selectOnly(key);
+    root?.focus();
+  };
+
+  /** Drags the whole selection when the item is part of it, the item alone otherwise. */
+  const handleItemDragStart = (key: string, event: DragEvent) => {
+    const keys = selectedKeys().has(key) ? [...selectedKeys()] : [key];
+    const assetIds = keys.filter(isAssetKey).map(keyValue);
+    const folders = keys.filter((entry) => !isAssetKey(entry)).map(keyValue);
+    if (assetIds.length) event.dataTransfer?.setData(ASSET_DRAG_TYPE, assetIds.join(","));
+    if (folders.length) event.dataTransfer?.setData(FOLDER_DRAG_TYPE, folders.join("\n"));
+    if (keys.length > 1) setSelectionDragImage(keys, event);
+  };
+
+  /**
+   * Shows every dragged item under the pointer, where it sits in the grid, as
+   * Finder does: copies of the items in view, laid out as they are, become the
+   * drag image. Items scrolled out of view are left out, their thumbnails are
+   * not loaded.
+   */
+  const setSelectionDragImage = (keys: string[], event: DragEvent) => {
+    const viewport = scroller?.getBoundingClientRect();
+    if (!event.dataTransfer || !viewport) return;
+
+    const items = keys
+      .map((key) => itemElement(key))
+      .filter((element) => element !== null)
+      .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+      .filter(({ rect }) => rect.bottom > viewport.top && rect.top < viewport.bottom);
+    if (items.length < 2) return;
+
+    const left = Math.min(...items.map(({ rect }) => rect.left));
+    const top = Math.min(...items.map(({ rect }) => rect.top));
+
+    // Off screen: the browser takes its picture of the element while it is in
+    // the document, and it can go once the drag has begun.
+    const image = document.createElement("div");
+    image.style.cssText = "position: fixed; left: -10000px; top: 0; pointer-events: none;";
+    for (const { element, rect } of items) {
+      const copy = element.cloneNode(true) as HTMLElement;
+      copy.removeAttribute("id");
+      copy.style.cssText = `position: absolute; left: ${rect.left - left}px; top: ${rect.top - top}px; width: ${rect.width}px; height: ${rect.height}px;`;
+      image.append(copy);
+    }
+    document.body.append(image);
+    event.dataTransfer.setDragImage(image, event.clientX - left, event.clientY - top);
+    setTimeout(() => image.remove());
+  };
+
+  const selectedAssets = () => {
+    const lib = library();
+    if (!lib) return [];
+    return assetSelection.ids().map((id) => lib.get(id)).filter((asset) => asset !== undefined);
+  };
+
+  const insertSelection = () => insertAssetsAtPlayhead(world, selectedAssets());
+
+  const deleteSelection = async () => {
+    const lib = library();
+    if (!lib) return;
+    const assets = selectedAssets();
+    const folders = assetSelection.folders();
+    try {
+      if (assets.length) await lib.remove(assets);
+      // A folder inside another selected folder is gone with it.
+      for (const folder of folders) {
+        if (lib.folders().has(folder)) await lib.deleteFolder(folder);
+      }
+    } catch (e) {
+      toast.error("Failed to delete", { description: (e as Error).message });
+    }
+  };
+
+  const itemElement = (key: string) => {
+    const attribute = isAssetKey(key) ? "data-asset-id" : "data-folder-path";
+    return root?.querySelector<HTMLElement>(`[${attribute}="${CSS.escape(keyValue(key))}"]`) ?? null;
+  };
+
+  const scrollToItem = (key: string) => {
+    itemElement(key)?.scrollIntoView({ block: "nearest" });
+  };
+
   // Deep paths collapse like the breadcrumbs docs example:
   // All assets / … / parent / current, with the hidden folders in a dropdown.
   const folderPath = createMemo(() => ancestorsOf(currentFolder()));
@@ -107,9 +284,9 @@ export function Assets() {
     if (currentFolder()) openFolder(dirname(currentFolder()));
   };
 
-  const getAssetIdFromTarget = (target: EventTarget | null) => {
+  const isItemTarget = (target: EventTarget | null) => {
     const element = target instanceof Element ? target : null;
-    return element?.closest("[data-asset-id]")?.getAttribute("data-asset-id") ?? null;
+    return element?.closest("[data-asset-id], [data-folder-path]") != null;
   };
 
   // A folder that went away (deleted, moved) closes to the nearest one left.
@@ -180,35 +357,42 @@ export function Assets() {
   };
 
 
-  const handleSelectAsset = (assetId: string) => {
-    setSelectedAssetId(assetId);
-    root?.focus();
+  /** Moves the lead an item over, or a row up or down, as Finder's icon view does. */
+  const moveSelection = (arrow: string, extend: boolean) => {
+    const keys = visibleKeys();
+    if (keys.length === 0) return;
+
+    const columns = 2;
+    const count = keys.length;
+    const current = lead === null ? -1 : keys.indexOf(lead);
+
+    let index: number;
+    if (current < 0) {
+      index = 0;
+    } else {
+      if (arrow === "ArrowLeft") index = current - 1;
+      else if (arrow === "ArrowRight") index = current + 1;
+      else if (arrow === "ArrowUp") index = current - columns;
+      // Down from a row above a short last row lands on its last item.
+      else if (current + columns < count) index = current + columns;
+      else if (Math.floor(current / columns) < Math.floor((count - 1) / columns)) index = count - 1;
+      else return;
+
+      if (index < 0 || index >= count) return;
+    }
+
+    const key = keys[index];
+    if (extend && anchor !== null) selectRangeTo(key);
+    else selectOnly(key);
+    scrollToItem(key);
   };
 
-  const moveSelection = (delta: number) => {
-    const items = Array.from(
-      root?.querySelectorAll<HTMLElement>("[data-asset-id]") ?? []
-    );
-    if (items.length === 0) return;
-
-    const currentId = selectedAssetId();
-    const currentIndex = currentId
-      ? items.findIndex(item => item.dataset.assetId === currentId)
-      : -1;
-    const baseIndex = currentIndex === -1 ? 0 : currentIndex;
-    const nextIndex = Math.min(
-      items.length - 1,
-      Math.max(0, baseIndex + delta)
-    );
-
-    const nextItem = items[nextIndex];
-    const nextId = nextItem?.dataset.assetId;
-    if (!nextId) return;
-
-    setSelectedAssetId(nextId);
-    nextItem.scrollIntoView({ block: "nearest" });
-  };
-
+  /**
+   * Finder's keys for the grid: arrows move the selection and Shift-arrows
+   * grow it, ⌘A selects every item in view and ⌥⌘A or Escape none, ⌘↓ opens
+   * the selected folder and ⌘↑ goes up, ⌫ deletes the selection. Handled keys
+   * stop here, so the canvas does not act on them too.
+   */
   const handleKeyDown = (event: KeyboardEvent) => {
     const target = event.target as HTMLElement | null;
     if (
@@ -219,13 +403,13 @@ export function Assets() {
       return;
     }
 
+    const command = event.metaKey || event.ctrlKey;
+
     if (event.key === "Backspace" || event.key === "Delete") {
-      const selected = selectedAssetId();
-      const entry = selected ? library()?.get(selected) : undefined;
-      if (entry) {
+      if (selectedKeys().size > 0) {
         event.preventDefault();
         event.stopPropagation();
-        void library()?.remove([entry]);
+        void deleteSelection();
         return;
       }
 
@@ -237,24 +421,38 @@ export function Assets() {
       return;
     }
 
-    const columns = 2;
-    const deltaByKey: Record<string, number> = {
-      ArrowUp: -columns,
-      ArrowDown: columns,
-      ArrowLeft: -1,
-      ArrowRight: 1,
-    };
-    const delta = deltaByKey[event.key];
-    if (delta === undefined) return;
+    // By code: ⌥ turns the A of ⌥⌘A into another character on a Mac.
+    if (command && event.code === "KeyA") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.altKey) clearSelection();
+      else selectAll();
+      return;
+    }
 
+    if (event.key === "Escape" && selectedKeys().size > 0) {
+      event.preventDefault();
+      event.stopPropagation();
+      clearSelection();
+      return;
+    }
+
+    if (!event.key.startsWith("Arrow")) return;
     event.preventDefault();
-    moveSelection(delta);
+    event.stopPropagation();
+
+    if (command && event.key === "ArrowDown") {
+      const folders = assetSelection.folders();
+      if (folders.length === 1 && assetSelection.ids().length === 0) openFolder(folders[0]);
+    } else if (command && event.key === "ArrowUp") {
+      handleGoToParent();
+    } else if (!command && !event.altKey) {
+      moveSelection(event.key, event.shiftKey);
+    }
   };
 
   const handleBackgroundClick = (event: MouseEvent) => {
-    if (!getAssetIdFromTarget(event.target)) {
-      setSelectedAssetId(null);
-    }
+    if (!isItemTarget(event.target)) clearSelection();
   };
 
   const hasAssets = () => allAssets().length > 0;
@@ -478,6 +676,7 @@ export function Assets() {
           </div>
         </Show>
         <div
+          ref={scroller}
           class="flex-1 min-h-0 overflow-y-auto p-4 pt-3"
           onClick={handleBackgroundClick}
         >
@@ -515,9 +714,15 @@ export function Assets() {
                   <FolderItem
                     path={folder}
                     renaming={renamingFolder() === folder}
+                    selected={selectedKeys().has(folderKey(folder))}
+                    multiple={selectedKeys().size > 1 && selectedKeys().has(folderKey(folder))}
+                    onSelect={(event) => handleItemClick(folderKey(folder), event)}
+                    onContextSelect={() => handleItemContextMenu(folderKey(folder))}
+                    onDragStart={(event) => handleItemDragStart(folderKey(folder), event)}
                     onRenameStart={() => setRenamingFolder(folder)}
                     onRenameEnd={() => setRenamingFolder(null)}
                     onOpen={() => openFolder(folder)}
+                    onDelete={deleteSelection}
                   />
                 )}
               </For>
@@ -525,8 +730,13 @@ export function Assets() {
                 {(asset) => (
                   <LazyAssetItem
                     asset={asset}
-                    selected={selectedAssetId() === asset.id}
-                    onSelect={() => handleSelectAsset(asset.id)}
+                    selected={selectedKeys().has(assetKey(asset.id))}
+                    multiple={selectedKeys().size > 1 && selectedKeys().has(assetKey(asset.id))}
+                    onSelect={(event) => handleItemClick(assetKey(asset.id), event)}
+                    onContextSelect={() => handleItemContextMenu(assetKey(asset.id))}
+                    onDragStart={(event) => handleItemDragStart(assetKey(asset.id), event)}
+                    onInsert={insertSelection}
+                    onDelete={deleteSelection}
                   />
                 )}
               </For>

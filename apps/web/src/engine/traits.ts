@@ -142,12 +142,13 @@ export const PathEditor = trait({
 export const PointerEvents = trait({ queue: () => [] as CanvasPointerEvent[] });
 
 /**
- * The library asset picked in the assets panel, by id (null for none). The
- * inspector shows its information; a click on empty canvas clears it, like
- * it clears the node selection. Not a document property: which asset is
- * being looked at is editor state, not something the JSX says.
+ * The library items picked in the assets panel: asset ids and folder paths.
+ * The inspector shows the information of a lone selected asset; a click on
+ * empty canvas clears it, like it clears the node selection. Not a document
+ * property: which assets are being looked at is editor state, not something
+ * the JSX says.
  */
-export const AssetSelection = trait({ id: null as string | null });
+export const AssetSelection = trait({ ids: () => [] as string[], folders: () => [] as string[] });
 
 /**
  * The config of the project on disk (its package.json `diffusion` field),

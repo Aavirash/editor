@@ -69,8 +69,16 @@ export async function replaceAssetSource(library: AssetLibrary, asset: Asset): P
 
 /** Inserts `asset` at the playhead of the active scene; tells the user when there is nowhere to put it. */
 export function insertAssetAtPlayhead(world: World, asset: Asset): void {
-  if (!insertAsset(world, asset)) {
-    toast("Nothing to insert into", { description: "Open a project first." });
+  insertAssetsAtPlayhead(world, [asset]);
+}
+
+/** Inserts each of `assets` at the playhead, all starting there. */
+export function insertAssetsAtPlayhead(world: World, assets: ReadonlyArray<Asset>): void {
+  for (const asset of assets) {
+    if (!insertAsset(world, asset)) {
+      toast("Nothing to insert into", { description: "Open a project first." });
+      return;
+    }
   }
 }
 
