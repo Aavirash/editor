@@ -2,20 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// The asset library of a project: the manifest, loaded with handles attached,
-// plus everything that changes it — imports, renames, folders, bytes the app
-// produced — and the one place a `src` is turned into an asset. Files the user
-// imports stay where they are (the manifest links to them by absolute path);
-// only bytes the app itself produces are written into the project's
-// `assets/` directory, and anything found there that the manifest does not
-// know is taken into the library. What is derived from assets and worth
-// keeping (thumbnails, waveforms) is the `cache`'s, under `cache/`.
-//
-// Knows nothing of the host: files come and go through a `ProjectFS`, and
-// what it cannot do itself (follow a rename into whatever names assets by
-// path, rebind whatever is bound to a relinked asset's old id) it asks of
-// `LibraryOptions`. Its state is solid signals (`assets()`, `folders()`), so
-// readers inside a tracking scope follow it.
 
 import { createSignal, type Accessor } from 'solid-js';
 
@@ -208,8 +194,10 @@ export class AssetLibrary {
 			return this.describeSequence(record.source, frames, { path: record.path, createdAt: record.createdAt });
 		}
 
+		// The recorded mtime is a File's `lastModified`, whole milliseconds; a
+		// host's stat may carry the fraction, which is no change.
 		const stat = await this.fs.stat(record.source);
-		if (!stat || (record.stat && stat.size === record.stat.size && stat.mtime === record.stat.mtime)) {
+		if (!stat || (record.stat && stat.size === record.stat.size && Math.floor(stat.mtime) === record.stat.mtime)) {
 			return this.attach(record);
 		}
 		return this.describeFile(record.source, { path: record.path, createdAt: record.createdAt });
