@@ -4,3 +4,4 @@
 
 export * from './host';
 export * from './cover';
+export * from './collections';

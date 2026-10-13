@@ -16,6 +16,18 @@ export interface ProjectRecord extends ProjectInfo {
   recordedAt: string; // When the app first put it on record.
   lastOpenedAt: string;
   cover: Blob | null;
+  collectionId?: string; // The collection it is filed in; none files it at the top level.
+}
+
+/**
+ * A collection of projects: a folder in the dashboard, not on disk. Projects
+ * name the one they are in (`ProjectRecord.collectionId`), so a collection
+ * can be empty, and renaming one is one write.
+ */
+export interface CollectionRecord {
+  id: string;
+  name: string;
+  createdAt: string;
 }
 
 /**
@@ -44,12 +56,16 @@ export interface GlobalDBSchema extends idb.DBSchema {
     value: ProjectBundle;
     key: string;
   };
+  collections: {
+    value: CollectionRecord;
+    key: string;
+  };
 }
 
 type UpgradeTransaction = Parameters<NonNullable<idb.OpenDBCallbacks<GlobalDBSchema>['upgrade']>>[3];
 
 const DB_NAME = 'diffusion-studio-idb';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 const dbPromise = openDB<GlobalDBSchema>(DB_NAME, DB_VERSION, {
   async upgrade(db, _oldVersion, _newVersion, tx) {
@@ -60,6 +76,9 @@ const dbPromise = openDB<GlobalDBSchema>(DB_NAME, DB_VERSION, {
       const store = db.createObjectStore('projects', { keyPath: 'dir' });
       store.createIndex('by-id', 'id');
       store.createIndex('by-last-opened', 'lastOpenedAt');
+    }
+    if (!db.objectStoreNames.contains('collections')) {
+      db.createObjectStore('collections', { keyPath: 'id' });
     }
     if (db.objectStoreNames.contains('roots' as never)) await retireRoots(db, tx);
   },
@@ -104,16 +123,17 @@ async function retireRoots(db: idb.IDBPDatabase<GlobalDBSchema>, tx: UpgradeTran
 
 /**
  * Puts `project` on record as just opened — what its folder says now,
- * replacing the copy the record held — or on record for the first time.
+ * replacing the copy the record held — or on record for the first time, filed
+ * in `collectionId` when one is given.
  */
-export async function rememberProject(project: ProjectInfo): Promise<ProjectRecord> {
+export async function rememberProject(project: ProjectInfo, collectionId?: string): Promise<ProjectRecord> {
   const db = await dbPromise;
   const now = new Date().toISOString();
   const existing = await db.get('projects', project.dir);
 
   const record: ProjectRecord = existing
     ? { ...existing, ...project, lastOpenedAt: now }
-    : { ...project, recordedAt: now, lastOpenedAt: now, cover: null };
+    : { ...project, recordedAt: now, lastOpenedAt: now, cover: null, collectionId };
 
   await db.put('projects', record);
   return record;
@@ -130,6 +150,12 @@ export async function updateProjectRecord(project: ProjectInfo): Promise<void> {
   const existing = await tx.store.get(project.dir);
   if (existing) await tx.store.put({ ...existing, ...project });
   await tx.done;
+}
+
+/** The record for the project in `dir`, or undefined when it is not on record. */
+export async function getProjectRecord(dir: string): Promise<ProjectRecord | undefined> {
+  const db = await dbPromise;
+  return db.get('projects', dir);
 }
 
 /** Every project on record, most recently opened first. */
@@ -186,6 +212,51 @@ export async function rememberProjectCover(dir: string, cover: Blob): Promise<vo
 export async function forgetProject(dir: string): Promise<void> {
   const db = await dbPromise;
   await db.delete('projects', dir);
+}
+
+// ---------------------------------------------------------------------------
+// Collections
+
+/** Every collection, oldest first: the order they were made in. */
+export async function listCollectionRecords(): Promise<CollectionRecord[]> {
+  const db = await dbPromise;
+  const collections = await db.getAll('collections');
+  return collections.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+/** Puts `collection` on record, or replaces the one with its id. */
+export async function putCollectionRecord(collection: CollectionRecord): Promise<void> {
+  const db = await dbPromise;
+  await db.put('collections', collection);
+}
+
+/**
+ * Takes collection `id` off the record. The projects in it are kept, at the
+ * top level.
+ */
+export async function deleteCollectionRecord(id: string): Promise<void> {
+  const db = await dbPromise;
+  const tx = db.transaction(['collections', 'projects'], 'readwrite');
+  const projects = tx.objectStore('projects');
+  for (const record of await projects.getAll()) {
+    if (record.collectionId === id) await projects.put({ ...record, collectionId: undefined });
+  }
+  await tx.objectStore('collections').delete(id);
+  await tx.done;
+}
+
+/**
+ * Files the projects in `dirs` in collection `id`, or at the top level when
+ * it is undefined. Projects not on record are skipped.
+ */
+export async function fileProjectRecords(dirs: string[], id: string | undefined): Promise<void> {
+  const db = await dbPromise;
+  const tx = db.transaction('projects', 'readwrite');
+  for (const dir of dirs) {
+    const existing = await tx.store.get(dir);
+    if (existing) await tx.store.put({ ...existing, collectionId: id });
+  }
+  await tx.done;
 }
 
 // ---------------------------------------------------------------------------

@@ -8,7 +8,6 @@ import {
   Show,
   createEffect,
   createMemo,
-  createResource,
   createSignal,
   onCleanup,
 } from "solid-js";
@@ -47,9 +46,7 @@ import { track } from "@/lib/analytics";
 import {
   createProject,
   isDesktop,
-  listProjects,
   projectKey,
-  projectsRevision,
   type ProjectInfo,
 } from "@/projects";
 
@@ -62,6 +59,7 @@ import {
   DashboardCardPreview,
   createBackgroundClickHandler,
   createNewProject,
+  createProjectList,
   openProjectFromList,
 } from "./shared";
 import { parseTimestamp } from "./utils";
@@ -129,10 +127,7 @@ export function DashboardHomeView() {
 
   // The projects the app knows — created here, or opened from a folder —
   // refetched whenever that list changes.
-  const [projects, { refetch: refetchProjects }] = createResource(
-    projectsRevision,
-    () => listProjects(),
-  );
+  const [projects, { refetch: refetchProjects }] = createProjectList();
   // The model is shared with the chat panel and remembered across sessions;
   // the picker is fed by the agent host's probes, so what it offers is what
   // is installed and signed in.

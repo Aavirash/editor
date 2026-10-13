@@ -10,6 +10,7 @@ import { mainBridge } from '@/lib/ipc';
 import {
 	findProjectRecords,
 	forgetProject as forgetProjectRecord,
+	getProjectRecord,
 	listProjectRecords,
 	moveProjectRecord,
 	rememberProject,
@@ -57,9 +58,12 @@ export const isDesktop = (): boolean => !!window.desktop;
 export const isWindowsDesktop = (): boolean => window.desktop?.platform === "win32";
 export const isMacOSDesktop = (): boolean => window.desktop?.platform === "darwin";
 
-/** Puts `project` on the list (or marks it just opened) and tells the views. */
-async function remember(project: ProjectInfo): Promise<void> {
-	await rememberProject(project);
+/**
+ * Puts `project` on the list (or marks it just opened) and tells the views.
+ * A project new to the list is filed in `collectionId`, when one is given.
+ */
+async function remember(project: ProjectInfo, collectionId?: string): Promise<void> {
+	await rememberProject(project, collectionId);
 	setProjectsRevision((revision) => revision + 1);
 }
 
@@ -168,15 +172,16 @@ export async function forgetProject(dir: string): Promise<void> {
 }
 
 /**
- * Creates a project and puts it on the list. It starts as a draft, called
- * "Untitled", in the app's own folder, so nothing is asked: where it lives and
- * what it is called are settled when it is saved (see `saveProject`).
+ * Creates a project and puts it on the list, filed in `collectionId` when one
+ * is given. It starts as a draft, called "Untitled", in the app's own folder,
+ * so nothing is asked: where it lives and what it is called are settled when
+ * it is saved (see `saveProject`).
  */
-export async function createProject(): Promise<ProjectInfo> {
+export async function createProject(collectionId?: string): Promise<ProjectInfo> {
 	if (!isDesktop()) throw new Error('Creating a project requires the desktop app.');
 
 	const project = await mainBridge.call(MAIN_CHANNELS.PROJECTS_CREATE, undefined);
-	await remember(project);
+	await remember(project, collectionId);
 	return project;
 }
 
@@ -259,12 +264,16 @@ export async function renameProject(dir: string, displayName: string): Promise<P
 	return project;
 }
 
-/** Copies the project in `dir` next to itself and returns the copy (a new id), on the list. */
+/**
+ * Copies the project in `dir` next to itself and returns the copy (a new id),
+ * on the list in the collection the original is in.
+ */
 export async function duplicateProject(dir: string): Promise<ProjectInfo> {
 	if (!dir) throw new Error('No project folder.');
 
 	const project = await mainBridge.call(MAIN_CHANNELS.PROJECTS_DUPLICATE, { dir });
-	await remember(project);
+	const original = await getProjectRecord(dir);
+	await remember(project, original?.collectionId);
 	return project;
 }
 

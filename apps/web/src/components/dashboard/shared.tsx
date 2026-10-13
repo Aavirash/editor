@@ -18,6 +18,7 @@ import {
   onCleanup,
   type JSX,
 } from "solid-js";
+import { createStore, reconcile } from "solid-js/store";
 import { Separator } from "../ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "somoto";
@@ -30,7 +31,9 @@ import {
   deleteProject,
   forgetProject,
   isDesktop,
+  listProjects,
   locateProject,
+  projectsRevision,
   relocateProject,
   type ProjectInfo,
 } from "@/projects";
@@ -548,16 +551,40 @@ export function createBackgroundClickHandler(onCLick: () => void): JSX.EventHand
 }
 
 /**
- * Creates a fresh project — an "Untitled" draft — and puts it on the list.
- * Null, with the reason already shown, when there is no desktop to create it
- * on. The one flow behind every "new project": the card on each view.
+ * The projects the app knows, refetched whenever that list changes. Each
+ * refetch is merged into the last by folder, so a project that is still there
+ * keeps its object and only its changed fields update: the card showing it
+ * stays mounted, and a menu open on it stays open (a move to a collection
+ * checks its new one in place).
  */
-export async function createNewProject(): Promise<ProjectInfo | null> {
+export function createProjectList() {
+  return createResource(projectsRevision, () => listProjects(), {
+    storage: (initial) => {
+      const [store, setStore] = createStore({ value: initial });
+      return [
+        () => store.value,
+        (next) => {
+          const value = typeof next === "function" ? next(store.value) : next;
+          setStore("value", reconcile(value, { key: "dir" }));
+          return store.value;
+        },
+      ];
+    },
+  });
+}
+
+/**
+ * Creates a fresh project — an "Untitled" draft — and puts it on the list,
+ * filed in `collectionId` when one is given. Null, with the reason already
+ * shown, when there is no desktop to create it on. The one flow behind every
+ * "new project": the card on each view.
+ */
+export async function createNewProject(collectionId?: string): Promise<ProjectInfo | null> {
   if (!isDesktop()) {
     toast.error("Projects on disk are only available in the desktop app");
     return null;
   }
-  const project = await createProject();
+  const project = await createProject(collectionId);
   track("project_created");
   return project;
 }

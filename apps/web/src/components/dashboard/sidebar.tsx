@@ -98,7 +98,7 @@ type DashboardSidebarNavProps = {
 /** The scrolling middle of the sidebar: stacked sections, then empty space. */
 export function DashboardSidebarNav(props: DashboardSidebarNavProps) {
   return (
-    <div class="flex min-h-0 flex-1 flex-col gap-2 px-3">
+    <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3">
       {props.children}
       <div class="min-h-0 flex-1" />
       {props.footer}
@@ -141,7 +141,7 @@ export function DashboardSidebarSection(props: DashboardSidebarSectionProps) {
     <div class="flex shrink-0 flex-col">
       <Show when={props.title}>
         <div class="flex h-8 shrink-0 items-center px-1">
-          <p class="text-xs text-muted-foreground">{props.title}</p>
+          <p class="text-xs font-450 text-muted-foreground">{props.title}</p>
         </div>
       </Show>
       {props.children}

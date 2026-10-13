@@ -7,16 +7,27 @@ import { toast } from "somoto";
 
 import {
   ContextMenu,
+  ContextMenuCheckboxItem,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuPortal,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { TextField, TextFieldInput } from "@/components/ui/text-field";
 import { track } from "@/lib/analytics";
 import { listEditors, openInEditor, revealPath, type EditorInfo } from "@/lib/shell";
-import { duplicateProject, isWindowsDesktop, renameProject, type ProjectRecord } from "@/projects";
+import {
+  duplicateProject,
+  isWindowsDesktop,
+  listCollections,
+  moveProjectsToCollection,
+  renameProject,
+  type ProjectRecord,
+} from "@/projects";
 
 import { DashboardCardButton, DashboardCardPreview, DashboardProjectThumbnail } from "./shared";
 import { formatEditedAt } from "./utils";
@@ -42,10 +53,10 @@ type DashboardProjectCardProps = {
 /**
  * A project in a dashboard grid: thumbnail, name, and last-edited time, with
  * the context menu that opens it (here, in the file manager, or in a code
- * editor), renames, duplicates, and deletes it. Rename
- * happens inline, in place of the name, and lives here so every grid that
- * shows projects gets the same menu. With more than one project selected,
- * the menu only duplicates and deletes them all.
+ * editor), renames, duplicates, files it in a collection, and deletes it.
+ * Rename happens inline, in place of the name, and lives here so every grid
+ * that shows projects gets the same menu. With more than one project
+ * selected, the menu only duplicates, files, and deletes them all.
  */
 export function DashboardProjectCard(props: DashboardProjectCardProps) {
   const [renaming, setRenaming] = createSignal(false);
@@ -203,6 +214,7 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
             fallback={
               <>
                 <ContextMenuItem onSelect={handleDuplicate}>Duplicate {props.targets.length} projects</ContextMenuItem>
+                <MoveToMenu projects={props.targets} />
                 <ContextMenuSeparator class="my-2" />
                 <ContextMenuItem onSelect={props.onDelete}>Delete {props.targets.length} projects</ContextMenuItem>
               </>
@@ -221,11 +233,55 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
             <ContextMenuSeparator class="my-2" />
             <ContextMenuItem onSelect={startRenaming}>Rename</ContextMenuItem>
             <ContextMenuItem onSelect={handleDuplicate}>Duplicate</ContextMenuItem>
+            <MoveToMenu projects={props.targets} />
             <ContextMenuSeparator class="my-2" />
             <ContextMenuItem onSelect={props.onDelete}>Delete</ContextMenuItem>
           </Show>
         </ContextMenuContent>
       </ContextMenuPortal>
     </ContextMenu>
+  );
+}
+
+/**
+ * Move to ▸ every collection, checked for the one `projects` are filed in. A
+ * project is in one collection at most: checking another moves it there, and
+ * unchecking the checked one takes it back to the top level. Mounts with the
+ * menu, so the collections are read when it opens.
+ */
+function MoveToMenu(props: { projects: ProjectRecord[] }) {
+  const [collections] = createResource(listCollections, { initialValue: [] });
+  // Checked only when every project is in it, so a mixed selection checks none.
+  const isIn = (id: string) => props.projects.every((project) => project.collectionId === id);
+
+  const move = async (collectionId: string | undefined) => {
+    try {
+      await moveProjectsToCollection(props.projects.map((project) => project.dir), collectionId);
+    } catch (e) {
+      toast.error("Failed to move project", { description: (e as Error).message });
+    }
+  };
+
+  return (
+    <ContextMenuSub>
+      <ContextMenuSubTrigger>Move to</ContextMenuSubTrigger>
+      <ContextMenuPortal>
+        <ContextMenuSubContent class="w-45 gap-0">
+          <For
+            each={collections()}
+            fallback={<ContextMenuItem disabled>No folders</ContextMenuItem>}
+          >
+            {(collection) => (
+              <ContextMenuCheckboxItem
+                checked={isIn(collection.id)}
+                onChange={(checked) => move(checked ? collection.id : undefined)}
+              >
+                <span class="min-w-0 flex-1 truncate">{collection.name}</span>
+              </ContextMenuCheckboxItem>
+            )}
+          </For>
+        </ContextMenuSubContent>
+      </ContextMenuPortal>
+    </ContextMenuSub>
   );
 }
