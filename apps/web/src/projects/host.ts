@@ -238,14 +238,15 @@ export async function resolveProject(ref: string): Promise<ProjectInfo | null> {
  * Opens the folder `dir` as a project, making it one first when it is not:
  * the folder is created if missing and, when nothing in it can be an entry,
  * given an `index.tsx` holding an empty stage — and nothing else. Put on the
- * list, so it stays reachable by name or id across relaunches. How
+ * list, so it stays reachable by name or id across relaunches, filed in
+ * `collectionId` when it is new to the list and one is given. How
  * `diffusion open <path>` lands anywhere on disk.
  */
-export async function openProjectFolder(dir: string): Promise<ProjectInfo> {
+export async function openProjectFolder(dir: string, collectionId?: string): Promise<ProjectInfo> {
 	if (!isDesktop()) throw new Error('Opening a project folder requires the desktop app.');
 
 	const project = await mainBridge.call(MAIN_CHANNELS.PROJECTS_INIT, { dir });
-	await remember(project);
+	await remember(project, collectionId);
 	return project;
 }
 

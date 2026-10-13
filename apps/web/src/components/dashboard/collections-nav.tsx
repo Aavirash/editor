@@ -66,7 +66,7 @@ export function DashboardSidebarCollections(props: DashboardSidebarCollectionsPr
       >
         <SidebarNameField
           icon="navigation.folder"
-          value=""
+          value="Untitled Folder"
           placeholder="Folder name"
           onCommit={handleAdd}
           onCancel={() => setAdding(false)}

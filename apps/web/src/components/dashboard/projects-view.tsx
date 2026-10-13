@@ -3,9 +3,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { toast } from "somoto";
-import { For, createMemo, createSignal } from "solid-js";
+import { For, Show, createMemo, createSignal } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -31,7 +32,7 @@ import { DashboardSearchPanel } from "./search-bar";
 import { projectRoute, useReturnHere } from "@/hooks/use-project-route";
 import { Icon } from "../ui/icon";
 import { track } from "@/lib/analytics";
-import { projectKey, type ProjectInfo } from "@/projects";
+import { isDesktop, openProjectFolder, pickProjectFolder, projectKey, type ProjectInfo } from "@/projects";
 
 import type { ProjectScope, ProjectSortOption } from "./types";
 
@@ -56,6 +57,7 @@ export function DashboardProjectsView(props: DashboardProjectsViewProps) {
   const [sort, setSort] = createSignal<ProjectSortOption>("last-viewed");
   const [projects, { refetch: refetchProjects }] = createProjectList();
   const [creating, setCreating] = createSignal(false);
+  const [picking, setPicking] = createSignal(false);
   const [pendingDelete, setPendingDelete] = createSignal<ProjectInfo[]>([]);
   const [grid, setGrid] = createSignal<HTMLDivElement>();
 
@@ -135,6 +137,21 @@ export function DashboardProjectsView(props: DashboardProjectsViewProps) {
     }
   };
 
+  const handleOpenFolder = async () => {
+    if (picking()) return;
+    setPicking(true);
+
+    try {
+      const dir = await pickProjectFolder();
+      if (!dir) return;
+      await openProjectFolder(dir, scopeCollectionId(props.scope));
+    } catch (e) {
+      toast.error("Failed to open project", { description: (e as Error).message });
+    } finally {
+      setPicking(false);
+    }
+  };
+
   return (
     <DashboardSearchPanel
       value={search}
@@ -147,7 +164,12 @@ export function DashboardProjectsView(props: DashboardProjectsViewProps) {
         onBackgroundClick={selection.clear}
         gridRef={setGrid}
         controls={
-          <>
+          <div class="flex items-center gap-2">
+            <Show when={isDesktop() && props.scope.kind !== "drafts"}>
+              <Button variant="secondary" disabled={picking()} onClick={handleOpenFolder}>
+                Open project...
+              </Button>
+            </Show>
             <Select<(typeof SORT_OPTIONS)[number]>
               options={SORT_OPTIONS}
               value={selectedSortOption()}
@@ -169,7 +191,7 @@ export function DashboardProjectsView(props: DashboardProjectsViewProps) {
                 <SelectContent />
               </SelectPortal>
             </Select>
-          </>
+          </div>
         }
       >
         <DashboardCardButton onClick={handleCreateProject}>

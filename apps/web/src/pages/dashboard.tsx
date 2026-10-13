@@ -3,8 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { useSearchParams } from "@solidjs/router";
-import { Match, Show, Switch, createEffect, createMemo, createResource, createSignal, onCleanup, onMount } from "solid-js";
-import { toast } from "somoto";
+import { Match, Show, Switch, createEffect, createMemo, createResource, createSignal, onMount } from "solid-js";
 
 import { DashboardAccountView } from "@/components/dashboard/account-view";
 import { DashboardAiCreditsView } from "@/components/dashboard/ai-credits-view";
@@ -33,12 +32,9 @@ import {
   isDesktop,
   isWindowsDesktop,
   listCollections,
-  openProjectFolder,
-  pickProjectFolder,
   projectsRevision,
   type CollectionRecord,
 } from "@/projects";
-import { isInputTarget } from "@/utils";
 
 import type { DashboardView, ProjectScope } from "@/components/dashboard/types";
 
@@ -78,32 +74,6 @@ function isSettingsView(view: DashboardView): boolean {
 export function DashboardPage() {
   const [params, setParams] = useSearchParams();
   const isFullscreen = useFullscreenState();
-
-  // ⌘I: the native folder picker, and the chosen folder on the recents list.
-  let picking = false;
-  const handleShortcut = async (event: KeyboardEvent) => {
-    if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
-    if (event.key.toLowerCase() !== "i" || isInputTarget(event)) return;
-
-    event.preventDefault();
-    if (picking || !isDesktop()) return;
-    picking = true;
-
-    try {
-      const dir = await pickProjectFolder();
-      if (!dir) return;
-      await openProjectFolder(dir);
-    } catch (e) {
-      toast.error("Failed to add project", { description: (e as Error).message });
-    } finally {
-      picking = false;
-    }
-  };
-
-  onMount(() => {
-    window.addEventListener("keydown", handleShortcut);
-    onCleanup(() => window.removeEventListener("keydown", handleShortcut));
-  });
 
   const view = (): DashboardView => parseView(params.dashboard);
   const setView = (next: DashboardView) => setParams({ dashboard: next, collection: undefined }, { replace: true });
