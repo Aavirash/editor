@@ -20,10 +20,11 @@ import { LazyAssetItem } from "@/components/sidebar-left/asset-item";
 import { usePromptInput } from "@/context/prompt-input";
 import { restoreConfig } from "@/components/genai/saved-config";
 import { assetName } from "@diffusionstudio/assets";
-import { useTrait } from "@diffusionstudio/koota-solid";
+import { useTrait, useWorld } from "@diffusionstudio/koota-solid";
 import { AssetId, isScene } from "@diffusionstudio/runtime";
 import { useLibrary } from "@/engine/library";
-import { pickAndImport } from "@/engine/asset-actions";
+import { insertAssetAtPlayhead, pickAndImport } from "@/engine/asset-actions";
+import { ASSET_DRAG_TYPE } from "@/components/sidebar-left/folder-item";
 
 import type { Asset } from "@diffusionstudio/assets";
 import type { Entity } from "koota";
@@ -55,6 +56,7 @@ export type AssetFillPickerProps = {
  */
 export function AssetFillPicker(props: AssetFillPickerProps) {
   const { openPromptInput } = usePromptInput();
+  const world = useWorld();
   const library = useLibrary();
 
   const [query, setQuery] = createSignal("");
@@ -89,6 +91,14 @@ export function AssetFillPicker(props: AssetFillPickerProps) {
       await pickAndImport(lib, "");
     } catch (e) {
       toast("Failed to import assets", { description: (e as Error).message });
+    }
+  };
+
+  const handleDeleteAsset = async (asset: Asset) => {
+    try {
+      await library()?.remove([asset]);
+    } catch (e) {
+      toast.error("Failed to delete", { description: (e as Error).message });
     }
   };
 
@@ -166,7 +176,12 @@ export function AssetFillPicker(props: AssetFillPickerProps) {
             <LazyAssetItem
               asset={asset}
               selected={selectedAssetId()?.value === asset.id}
+              multiple={false}
               onSelect={() => props.onSelectAsset(asset)}
+              onContextSelect={() => props.onSelectAsset(asset)}
+              onDragStart={(event) => event.dataTransfer?.setData(ASSET_DRAG_TYPE, asset.id)}
+              onInsert={() => insertAssetAtPlayhead(world, asset)}
+              onDelete={() => void handleDeleteAsset(asset)}
             />
           )}
         </For>
