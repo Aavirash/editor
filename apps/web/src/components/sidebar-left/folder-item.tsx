@@ -14,6 +14,7 @@ import {
   ContextMenuTrigger,
 } from "../ui/context-menu";
 import { Icon } from "../ui/icon";
+import { MiddleEllipsis } from "../ui/middle-ellipsis";
 import { useLibrary } from "@/engine/library";
 
 import type { AssetLibrary } from "@diffusionstudio/assets";
@@ -138,7 +139,7 @@ export function FolderItem(props: FolderItemProps) {
       >
         <div
           data-drop-target={isDropTarget()}
-          class="relative aspect-video w-full overflow-clip rounded bg-muted flex items-center justify-center after:pointer-events-none after:absolute after:inset-0 after:rounded after:opacity-0 after:ring-2 after:ring-inset after:ring-ring after:z-10 data-[drop-target=true]:after:opacity-100"
+          class="relative aspect-video w-full rounded bg-muted flex items-center justify-center after:pointer-events-none after:absolute after:-inset-px after:rounded-[5px] after:opacity-0 after:ring-2 after:ring-inset after:ring-ring after:z-10 data-[drop-target=true]:after:opacity-100"
         >
           <Icon name="folder-thumbnail" class="w-8 h-6 text-muted-foreground pointer-events-none" />
           <Show when={childCount() > 0}>
@@ -149,7 +150,7 @@ export function FolderItem(props: FolderItemProps) {
         </div>
         <Show
           when={props.renaming}
-          fallback={<div class="text-xs text-foreground truncate select-none">{name()}</div>}
+          fallback={<MiddleEllipsis text={name()} class="text-xs text-center text-muted-foreground select-none" />}
         >
           <input
             ref={handleFocusElement}
@@ -162,7 +163,7 @@ export function FolderItem(props: FolderItemProps) {
             onClick={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
-            class="text-xs text-foreground truncate bg-transparent rounded-sm outline-none ring-1 ring-primary px-0.5"
+            class="text-xs text-center text-foreground truncate bg-transparent rounded-sm outline-none ring-1 ring-primary px-0.5"
           />
         </Show>
       </ContextMenuTrigger>

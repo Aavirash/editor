@@ -17,6 +17,7 @@ import {
   ContextMenuTrigger,
 } from "../ui/context-menu";
 import { AssetThumbnail } from "../ui/asset-thumbnail";
+import { MiddleEllipsis } from "../ui/middle-ellipsis";
 import { formatAssetDuration } from "@/utils";
 import { useLibrary } from "@/engine/library";
 import { ASSET_DRAG_TYPE } from "./folder-item";
@@ -114,10 +115,10 @@ export function LazyAssetItem(props: LazyAssetItemProps) {
         <div
           ref={ref}
           data-selected={props.selected}
-          class="relative aspect-video w-full overflow-clip rounded bg-muted after:pointer-events-none after:absolute after:inset-0 after:rounded after:opacity-0 after:ring-2 after:ring-inset after:ring-ring after:z-10 data-[selected=true]:after:opacity-100"
+          class="relative aspect-video w-full rounded bg-muted after:pointer-events-none after:absolute after:-inset-px after:rounded-[5px] after:opacity-0 after:ring-2 after:ring-inset after:ring-ring after:z-10 data-[selected=true]:after:opacity-100"
         >
           <Show when={isVisible()}>
-            <AssetThumbnail asset={props.asset} class="absolute inset-0" cache={library()?.cache} />
+            <AssetThumbnail asset={props.asset} class="absolute inset-0 overflow-clip rounded" cache={library()?.cache} />
           </Show>
           <Show when={assetDuration()}>
             {(duration) => (
@@ -132,9 +133,12 @@ export function LazyAssetItem(props: LazyAssetItemProps) {
         <Show
           when={isRenaming()}
           fallback={
-            <div class="text-xs text-foreground truncate select-none" title={props.asset.source}>
-              {name()}
-            </div>
+            <MiddleEllipsis
+              text={name()}
+              data-selected={props.selected}
+              class="text-xs text-center text-muted-foreground select-none data-[selected=true]:text-foreground"
+              title={props.asset.source}
+            />
           }
         >
           <input
@@ -148,7 +152,7 @@ export function LazyAssetItem(props: LazyAssetItemProps) {
             onClick={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
-            class="text-xs text-foreground truncate bg-transparent rounded-sm outline-none ring-1 ring-primary px-0.5"
+            class="text-xs text-center text-foreground truncate bg-transparent rounded-sm outline-none ring-1 ring-primary px-0.5"
           />
         </Show>
       </ContextMenuTrigger>
