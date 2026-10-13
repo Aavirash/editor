@@ -11,29 +11,39 @@ import { useLibrary } from '../library';
 import type { Asset } from '@diffusionstudio/assets';
 
 /**
- * Reactive read and write of the AssetSelection trait: the one asset the
- * assets panel has picked and the inspector describes. Shared between the two
- * sidebars, so it lives on the world rather than in either panel.
+ * Reactive read and write of the AssetSelection trait: the assets and folders
+ * the assets panel has picked, and the one asset the inspector describes.
+ * Shared between the two sidebars, so it lives on the world rather than in
+ * either panel.
  */
 export function useAssetSelection() {
 	const world = useWorld();
 	const library = useLibrary();
 	const selection = useTrait(world, AssetSelection);
 
-	const id = () => selection()?.id ?? null;
+	const ids = () => selection()?.ids ?? [];
+	const folders = () => selection()?.folders ?? [];
 
-	// `list()` is the library's signal, so a removed or relinked asset drops
-	// out here without the panel having to watch for it.
+	// The asset the inspector describes: the selection, when it is one asset
+	// alone. `list()` is the library's signal, so a removed or relinked asset
+	// drops out here without the panel having to watch for it.
 	const asset = createMemo(() => {
 		const lib = library();
-		const current = id();
-		if (!lib || !current) return undefined;
-		return lib.list().find((entry) => entry.id === current);
+		const current = ids();
+		if (!lib || current.length !== 1 || folders().length) return undefined;
+		return lib.list().find((entry) => entry.id === current[0]);
 	});
 
+	/** Selects one asset alone, or nothing. */
 	const select = (next: Asset | string | null) => {
-		world.set(AssetSelection, { id: typeof next === 'string' ? next : (next?.id ?? null) });
+		const id = typeof next === 'string' ? next : next?.id;
+		world.set(AssetSelection, { ids: id ? [id] : [], folders: [] });
 	};
 
-	return { id, asset, select };
+	/** Replaces the selection with these assets and folders. */
+	const set = (next: { ids: string[]; folders: string[] }) => {
+		world.set(AssetSelection, next);
+	};
+
+	return { ids, folders, asset, select, set };
 }

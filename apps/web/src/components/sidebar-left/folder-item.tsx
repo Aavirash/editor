@@ -19,7 +19,7 @@ import { useLibrary } from "@/engine/library";
 
 import type { AssetLibrary } from "@diffusionstudio/assets";
 
-/** Drag payloads: comma-separated asset ids, or one folder path. */
+/** Drag payloads: comma-separated asset ids, and newline-separated folder paths. */
 export const ASSET_DRAG_TYPE = "application/x-asset-id";
 export const FOLDER_DRAG_TYPE = "application/x-folder-path";
 
@@ -36,14 +36,16 @@ export function handleFolderDrop(library: AssetLibrary | undefined, event: DragE
   if (!library) return false;
 
   const assetIds = event.dataTransfer?.getData(ASSET_DRAG_TYPE)?.split(",").filter(Boolean) ?? [];
-  const folder = event.dataTransfer?.getData(FOLDER_DRAG_TYPE);
-  if (!assetIds.length && !folder) return false;
+  const folders = event.dataTransfer?.getData(FOLDER_DRAG_TYPE)?.split("\n").filter(Boolean) ?? [];
+  if (!assetIds.length && !folders.length) return false;
 
   const assets = assetIds.map((id) => library.get(id)).filter((asset) => asset !== undefined);
   if (assets.length) library.move(assets, target);
 
-  if (folder && folder !== target) {
-    if (target === folder || target.startsWith(`${folder}/`)) {
+  for (const folder of folders) {
+    // A selected folder dropped on itself stays put; the rest of the selection goes in.
+    if (folder === target) continue;
+    if (target.startsWith(`${folder}/`)) {
       toast("Cannot move a folder into itself");
     } else {
       library.moveFolder(folder, target);
@@ -56,9 +58,17 @@ export type FolderItemProps = {
   /** The folder's library path. */
   path: string;
   renaming: boolean;
+  selected: boolean;
+  /** Selected along with other items: the menu then acts on all of them. */
+  multiple: boolean;
+  onSelect(event: MouseEvent): void;
+  onContextSelect(): void;
+  onDragStart(event: DragEvent): void;
   onRenameStart(): void;
   onRenameEnd(): void;
   onOpen(): void;
+  /** Deletes the selection. */
+  onDelete(): void;
 };
 
 export function FolderItem(props: FolderItemProps) {
@@ -70,10 +80,6 @@ export function FolderItem(props: FolderItemProps) {
     const children = library()?.childrenOf(props.path);
     return children ? children.folders.length + children.assets.length : 0;
   });
-
-  const handleDragStart = (event: DragEvent) => {
-    event.dataTransfer?.setData(FOLDER_DRAG_TYPE, props.path);
-  };
 
   const handleDragOver = (event: DragEvent) => {
     if (!isAssetOrFolderDrag(event)) return;
@@ -116,14 +122,6 @@ export function FolderItem(props: FolderItemProps) {
     });
   };
 
-  const handleDelete = async () => {
-    try {
-      await library()?.deleteFolder(props.path);
-    } catch (e) {
-      toast.error("Failed to delete", { description: (e as Error).message });
-    }
-  };
-
   return (
     <ContextMenu>
       <ContextMenuTrigger
@@ -131,15 +129,18 @@ export function FolderItem(props: FolderItemProps) {
         class="flex flex-col gap-1 text-left"
         data-folder-path={props.path}
         draggable={true}
-        onDragStart={handleDragStart}
+        onDragStart={(event: DragEvent) => props.onDragStart(event)}
         on:dragover={handleDragOver}
         on:dragleave={() => setIsDropTarget(false)}
         on:drop={handleDrop}
-        onClick={props.onOpen}
+        onClick={(event: MouseEvent) => props.onSelect(event)}
+        onDblClick={() => props.onOpen()}
+        onContextMenu={() => props.onContextSelect()}
       >
         <div
           data-drop-target={isDropTarget()}
-          class="relative aspect-video w-full rounded bg-muted flex items-center justify-center after:pointer-events-none after:absolute after:-inset-px after:rounded-[5px] after:opacity-0 after:ring-2 after:ring-inset after:ring-ring after:z-10 data-[drop-target=true]:after:opacity-100"
+          data-selected={props.selected}
+          class="relative aspect-video w-full rounded bg-muted flex items-center justify-center after:pointer-events-none after:absolute after:-inset-px after:rounded-[5px] after:opacity-0 after:ring-2 after:ring-inset after:ring-ring after:z-10 data-[drop-target=true]:after:opacity-100 data-[selected=true]:after:opacity-100"
         >
           <Icon name="folder-thumbnail" class="w-8 h-6 text-muted-foreground pointer-events-none" />
           <Show when={childCount() > 0}>
@@ -150,7 +151,13 @@ export function FolderItem(props: FolderItemProps) {
         </div>
         <Show
           when={props.renaming}
-          fallback={<MiddleEllipsis text={name()} class="text-xs text-center text-muted-foreground select-none" />}
+          fallback={
+            <MiddleEllipsis
+              text={name()}
+              data-selected={props.selected}
+              class="text-xs text-center text-muted-foreground select-none data-[selected=true]:text-foreground"
+            />
+          }
         >
           <input
             ref={handleFocusElement}
@@ -169,11 +176,13 @@ export function FolderItem(props: FolderItemProps) {
       </ContextMenuTrigger>
       <ContextMenuPortal>
         <ContextMenuContent class="w-[220px]">
-          <ContextMenuItem onSelect={props.onOpen}>Open</ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem onSelect={props.onRenameStart}>Rename</ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem onSelect={handleDelete}>Delete</ContextMenuItem>
+          <Show when={!props.multiple}>
+            <ContextMenuItem onSelect={props.onOpen}>Open</ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={props.onRenameStart}>Rename</ContextMenuItem>
+            <ContextMenuSeparator />
+          </Show>
+          <ContextMenuItem onSelect={props.onDelete}>Delete</ContextMenuItem>
         </ContextMenuContent>
       </ContextMenuPortal>
     </ContextMenu>

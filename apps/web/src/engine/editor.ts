@@ -391,8 +391,9 @@ export class DocumentEditor {
 	public select(entities: Entity | Entity[], options: { extend?: boolean } = {}): void {
 		const next = new Set(Array.isArray(entities) ? entities : [entities]);
 
-		if (this.world.has(AssetSelection) && this.world.get(AssetSelection)?.id !== null) {
-			this.world.set(AssetSelection, { id: null });
+		const assetSelection = this.world.get(AssetSelection);
+		if (assetSelection && (assetSelection.ids.length || assetSelection.folders.length)) {
+			this.world.set(AssetSelection, { ids: [], folders: [] });
 		}
 
 		if (!options.extend) {
