@@ -17,6 +17,7 @@ import {
   createResource,
   onCleanup,
   type JSX,
+  type Signal,
 } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { Separator } from "../ui/separator";
@@ -36,6 +37,7 @@ import {
   projectsRevision,
   relocateProject,
   type ProjectInfo,
+  type ProjectRecord,
 } from "@/projects";
 
 
@@ -563,12 +565,12 @@ export function createProjectList() {
       const [store, setStore] = createStore({ value: initial });
       return [
         () => store.value,
-        (next) => {
+        (next?: ProjectRecord[] | ((prev?: ProjectRecord[]) => ProjectRecord[] | undefined)) => {
           const value = typeof next === "function" ? next(store.value) : next;
           setStore("value", reconcile(value, { key: "dir" }));
           return store.value;
         },
-      ];
+      ] as Signal<ProjectRecord[] | undefined>;
     },
   });
 }
