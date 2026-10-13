@@ -6,8 +6,6 @@ import { Match, Switch } from "solid-js";
 import { toast } from "somoto";
 
 import { Button } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
-import { pickProjectsRoot, projectsRoot } from "@/projects";
 import { usePermissionState, type PermissionState } from "@/hooks/use-permission";
 
 import {
@@ -16,31 +14,6 @@ import {
   DashboardScrollView,
   DashboardSurfaceSection,
 } from "./shared";
-
-function DashboardProjectsFolderSection() {
-  const handleChange = async () => {
-    try {
-      await pickProjectsRoot();
-    } catch (e) {
-      toast.error("Failed to choose projects folder", { description: (e as Error).message });
-    }
-  };
-
-  return (
-    <DashboardSurfaceSection title="Projects folder">
-      <DashboardInfoActionRow
-        title="Save projects to"
-        leading={<Icon name="navigation.folder" class="text-foreground" />}
-        description={projectsRoot() ?? "No folder selected"}
-        action={
-          <Button variant="secondary" onClick={handleChange}>
-            Change...
-          </Button>
-        }
-      />
-    </DashboardSurfaceSection>
-  );
-}
 
 type PermissionActionButtonProps = {
   state: PermissionState;
@@ -194,7 +167,6 @@ function DashboardPermissionsSection() {
 export function DashboardSettingsView() {
   return (
     <DashboardScrollView>
-      <DashboardProjectsFolderSection />
       <DashboardPermissionsSection />
     </DashboardScrollView>
   );

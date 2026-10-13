@@ -8,6 +8,7 @@ import type { Accessor, ComponentProps, ValidComponent } from "solid-js"
 import { createContext, splitProps, useContext } from "solid-js"
 import { ContextMenu as ContextMenuPrimitive } from "@kobalte/core/context-menu"
 
+import { Icon } from "@/components/ui/icon"
 import { cx } from "@/lib/cva"
 
 export const ContextMenuPortal = ContextMenuPrimitive.Portal
@@ -214,26 +215,14 @@ export const ContextMenuCheckboxItem = <T extends ValidComponent = "div">(
       data-slot="context-menu-checkbox-item"
       disabled={local.disabled || isContentDisabled()}
       class={cx(
-        "group data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "group data-[highlighted]:bg-primary data-[highlighted]:text-primary-foreground relative flex cursor-default items-center gap-1 rounded-md bg-popover pr-2 pl-7 py-0 text-xs outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-7 w-full",
         local.class,
       )}
       {...rest}
     >
-      <span class="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
-        <ContextMenuPrimitive.ItemIndicator
-          as="svg"
-          xmlns="http://www.w3.org/2000/svg"
-          class="size-4"
-          viewBox="0 0 24 24"
-        >
-          <path
-            fill="none"
-            stroke="currentColor"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M20 6L9 17l-5-5"
-          />
+      <span class="pointer-events-none absolute left-0.5 flex size-6 items-center justify-center">
+        <ContextMenuPrimitive.ItemIndicator>
+          <Icon name="confirm-check" class="text-foreground group-data-[highlighted]:text-primary-foreground" />
         </ContextMenuPrimitive.ItemIndicator>
       </span>
       {local.children}

@@ -26,6 +26,8 @@ Nothing else is written — no tsconfig, README, or .gitignore. Those come with 
 
 The app remembers the folder, so the project reopens across app relaunches and stays addressable by folder name or project id.
 
+Keep the folder out of cloud-synced locations: iCloud Drive (including a synced Desktop or Documents), Dropbox, OneDrive, and Google Drive. Sync clients evict media to placeholders, upload half-written renders, and leave conflict copies. Open a local folder outside the synced tree instead.
+
 ## From a shell
 
 `diffusion open` is also how the app starts: it launches Diffusion Studio (macOS and Windows) or surfaces the running instance, then, given a path, calls the tool. With no path it only makes sure the app is up, printing nothing and exiting `0` once the app answers. Relative paths resolve against the shell's working directory. `--background` launches or keeps the app without raising a window — the way to drive the editor headless.

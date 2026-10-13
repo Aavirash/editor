@@ -12,6 +12,8 @@
 import type { LogEntry, ScreenshotResult } from "@diffusionstudio/dapi";
 import type { SourceEdit, WriteResult } from "./edit-types";
 import type { AgentId } from "./mcp-config";
+import type { EditorId, EditorInfo } from "./editors";
+import type { MissingProjectChoice, SaveAction } from "./projects";
 
 export const MAIN_WIRE = {
   REQUEST: "main:request",
@@ -30,6 +32,8 @@ export const MAIN_CHANNELS = {
   // Renderer→Main requests
   APP_OPEN_EXTERNAL: "app:open-external",
   APP_SHOW_IN_FOLDER: "app:show-in-folder",
+  APP_EDITORS_LIST: "app:editors-list",
+  APP_OPEN_IN_EDITOR: "app:open-in-editor",
   ANALYTICS_CONFIGURE: "analytics:configure",
   AUTH_GET_PENDING_CALLBACK: "auth:get-pending-callback",
   CHECKOUT_GET_PENDING_CALLBACK: "checkout:get-pending-callback",
@@ -44,14 +48,16 @@ export const MAIN_CHANNELS = {
   FILE_WRITE_CLOSE: "file:write-close",
   FILE_WRITE_ABORT: "file:write-abort",
   LOGS_GET: "logs:get",
-  PROJECTS_PICK_ROOT: "projects:pick-root",
   PROJECTS_PICK_FOLDER: "projects:pick-folder",
-  PROJECTS_DEFAULT_ROOT: "projects:default-root",
-  PROJECTS_SCAN: "projects:scan",
   PROJECTS_GET: "projects:get",
   PROJECTS_INIT: "projects:init",
   PROJECTS_RESOLVE: "projects:resolve",
+  PROJECTS_FIND_MOVED: "projects:find-moved",
+  PROJECTS_ASK_MISSING: "projects:ask-missing",
   PROJECTS_CREATE: "projects:create",
+  PROJECTS_PICK_SAVE: "projects:pick-save",
+  PROJECTS_SAVE: "projects:save",
+  PROJECTS_MOVE: "projects:move",
   PROJECTS_RENAME: "projects:rename",
   PROJECTS_DUPLICATE: "projects:duplicate",
   PROJECTS_DELETE: "projects:delete",
@@ -93,7 +99,7 @@ export type ProjectInfo = {
    * since — `PROJECTS_RESOLVE` is what gives one out.
    */
   id: string;
-  /** Folder name. Renaming the project moves it, so it is not the identity. */
+  /** Folder name. The user can move or rename it, so it is not the identity. */
   name: string;
   /** Human name from package.json `displayName` (falls back to the folder name). */
   displayName: string;
@@ -105,6 +111,11 @@ export type ProjectInfo = {
   modifiedAt: string;
   /** birthtime of the folder, ISO string. */
   createdAt: string;
+  /**
+   * Whether the folder is a draft's: in the app's drafts folder, named after
+   * the id, until the user saves it somewhere of their choosing.
+   */
+  draft: boolean;
 };
 
 export type CompileResult =
@@ -112,6 +123,8 @@ export type CompileResult =
 
 export type { SourceEdit, WriteResult };
 export type { AgentId };
+export type { EditorId, EditorInfo };
+export type { MissingProjectChoice };
 
 // One agent the settings page lists: whether it is set up on this machine,
 // whether its config already carries the app's MCP entry, and — for the
@@ -220,24 +233,19 @@ export type MainRequestMap = {
     request: { path: string };
     response: void;
   };
-  [MAIN_CHANNELS.LOGS_GET]: { request: void; response: LogEntry[] };
-  [MAIN_CHANNELS.PROJECTS_PICK_ROOT]: {
+  // The code editors installed here that a folder can be opened in.
+  [MAIN_CHANNELS.APP_EDITORS_LIST]: {
     request: void;
-    response: string | null;
+    response: EditorInfo[];
   };
+  [MAIN_CHANNELS.APP_OPEN_IN_EDITOR]: {
+    request: { id: EditorId; dir: string };
+    response: void;
+  };
+  [MAIN_CHANNELS.LOGS_GET]: { request: void; response: LogEntry[] };
   [MAIN_CHANNELS.PROJECTS_PICK_FOLDER]: {
     request: void;
     response: string | null;
-  };
-  [MAIN_CHANNELS.PROJECTS_DEFAULT_ROOT]: {
-    request: void;
-    response: string | null;
-  };
-  // Every project folder directly under `root`: what the app puts on its
-  // list when `root` is chosen as the projects root.
-  [MAIN_CHANNELS.PROJECTS_SCAN]: {
-    request: { root: string };
-    response: ProjectInfo[];
   };
   [MAIN_CHANNELS.PROJECTS_GET]: {
     request: { dir: string };
@@ -251,11 +259,35 @@ export type MainRequestMap = {
     request: { dir: string };
     response: ProjectInfo | null;
   };
+  // The project `id` in a folder beside `dir`, which no longer holds it (a
+  // folder renamed or moved in Finder); null when none does.
+  [MAIN_CHANNELS.PROJECTS_FIND_MOVED]: {
+    request: { dir: string; id: string };
+    response: ProjectInfo | null;
+  };
+  // Asks what to do about a project whose folder can't be found.
+  [MAIN_CHANNELS.PROJECTS_ASK_MISSING]: {
+    request: { displayName: string; dir: string };
+    response: MissingProjectChoice;
+  };
+  // A new project, as a draft called "Untitled" until it is saved.
   [MAIN_CHANNELS.PROJECTS_CREATE]: {
-    request: { root: string; displayName: string };
+    request: void;
     response: ProjectInfo;
   };
-  // Renames the project: `displayName` in the record, and the folder with it.
+  // Where to save a draft, or move a saved project; `name` fills the picker.
+  [MAIN_CHANNELS.PROJECTS_PICK_SAVE]: {
+    request: { dir: string; name: string; startIn: string | null; action: SaveAction };
+    response: string | null;
+  };
+  [MAIN_CHANNELS.PROJECTS_SAVE]: {
+    request: { dir: string; target: string };
+    response: ProjectInfo;
+  };
+  [MAIN_CHANNELS.PROJECTS_MOVE]: {
+    request: { dir: string; target: string };
+    response: ProjectInfo;
+  };
   [MAIN_CHANNELS.PROJECTS_RENAME]: {
     request: { dir: string; displayName: string };
     response: ProjectInfo;

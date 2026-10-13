@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { Computed, Fonts, FrameRate, getActiveEntity } from "@diffusionstudio/runtime";
-import { getProjectsRoot } from "@/projects";
+import { saveFolder } from "@/projects";
 
 import type { ToolHandler } from "../handler";
 
@@ -11,13 +11,13 @@ import type { ToolHandler } from "../handler";
  * What the project's source cannot say. The JSX is the composition — its
  * scenes, what is selected, which scene is active, the work area are all in
  * the file, and a caller that wants them reads it. What is left over is which
- * folder new projects go in, which project folder the app has open, where its
+ * folder projects are saved to, which project folder the app has open, where its
  * playhead sits, and which font families are actually registered in the
  * world drawing it.
  * With no project open only the root is left to report.
  */
 export const context: ToolHandler<"context"> = async (_, ctx) => {
-  const rootDir = await getProjectsRoot();
+  const rootDir = saveFolder();
 
   const open = ctx.session();
   if (!open) return { rootDir, projectDir: null, currentTime: null, fontFamilies: [] };

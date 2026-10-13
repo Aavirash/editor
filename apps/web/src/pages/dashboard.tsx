@@ -3,12 +3,12 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { useSearchParams } from "@solidjs/router";
-import { Match, Show, Switch, createEffect, createSignal, onCleanup, onMount } from "solid-js";
-import { toast } from "somoto";
+import { Match, Show, Switch, createEffect, createMemo, createResource, createSignal, onMount } from "solid-js";
 
 import { DashboardAccountView } from "@/components/dashboard/account-view";
 import { DashboardAiCreditsView } from "@/components/dashboard/ai-credits-view";
 import { DashboardBillingView } from "@/components/dashboard/billing-view";
+import { DashboardSidebarCollections } from "@/components/dashboard/collections-nav";
 import { DashboardGetDesktopApp } from "@/components/dashboard/get-desktop-app";
 import { DashboardHelpView } from "@/components/dashboard/help-view";
 import { DashboardHomeView } from "@/components/dashboard/home-view";
@@ -28,14 +28,20 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useFullscreenState } from "@/hooks/use-fullscreen-state";
 import { connectedAgents, fetchMcpStatus } from "@/lib/mcp";
-import { isDesktop, isWindowsDesktop, openProjectFolder, pickProjectFolder } from "@/projects";
-import { isInputTarget } from "@/utils";
+import {
+  isDesktop,
+  isWindowsDesktop,
+  listCollections,
+  projectsRevision,
+  type CollectionRecord,
+} from "@/projects";
 
-import type { DashboardView } from "@/components/dashboard/types";
+import type { DashboardView, ProjectScope } from "@/components/dashboard/types";
 
 const DASHBOARD_VIEWS: readonly DashboardView[] = [
   "home",
   "projects",
+  "drafts",
   "templates",
   "ai-credits",
   "billing",
@@ -69,34 +75,29 @@ export function DashboardPage() {
   const [params, setParams] = useSearchParams();
   const isFullscreen = useFullscreenState();
 
-  // ⌘I: the native folder picker, and the chosen folder on the recents list.
-  let picking = false;
-  const handleShortcut = async (event: KeyboardEvent) => {
-    if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
-    if (event.key.toLowerCase() !== "i" || isInputTarget(event)) return;
+  const view = (): DashboardView => parseView(params.dashboard);
+  const setView = (next: DashboardView) => setParams({ dashboard: next, collection: undefined }, { replace: true });
 
-    event.preventDefault();
-    if (picking || !isDesktop()) return;
-    picking = true;
-
-    try {
-      const dir = await pickProjectFolder();
-      if (!dir) return;
-      await openProjectFolder(dir);
-    } catch (e) {
-      toast.error("Failed to add project", { description: (e as Error).message });
-    } finally {
-      picking = false;
-    }
+  // The projects view lists one collection's projects when the URL names it.
+  const [collections] = createResource(projectsRevision, () => listCollections(), { initialValue: [] });
+  const collectionId = (): string | null => {
+    const raw = params.collection;
+    return (Array.isArray(raw) ? raw[0] : raw) || null;
   };
+  const openCollection = (collection: CollectionRecord) =>
+    setParams({ dashboard: "projects", collection: collection.id }, { replace: true });
 
-  onMount(() => {
-    window.addEventListener("keydown", handleShortcut);
-    onCleanup(() => window.removeEventListener("keydown", handleShortcut));
+  const projectScope = createMemo((): ProjectScope => {
+    if (view() === "drafts") return { kind: "drafts" };
+    const collection = collections().find((c) => c.id === collectionId());
+    return collection ? { kind: "collection", collection } : { kind: "all" };
   });
 
-  const view = (): DashboardView => parseView(params.dashboard);
-  const setView = (next: DashboardView) => setParams({ dashboard: next }, { replace: true });
+  // A collection deleted (or never there) leaves the URL naming nothing: back to all.
+  createEffect(() => {
+    if (collections.loading || !collectionId()) return;
+    if (!collections().some((c) => c.id === collectionId())) setView("projects");
+  });
 
   // Which navigation the sidebar shows. Landing on a settings view (deep link,
   // reload) opens the settings navigation; the user row opens it by itself.
@@ -147,10 +148,20 @@ export function DashboardPage() {
           <Show
             when={settingsNavOpen()}
             fallback={
-              <DashboardSidebarSection>
-                <DashboardSidebarItem active={view() === "home"} onClick={() => setView("home")} icon="home" label="Home" />
-                <DashboardSidebarItem active={view() === "projects"} onClick={() => setView("projects")} icon="diffusion-project-file" label="Projects" />
-              </DashboardSidebarSection>
+              <>
+                <DashboardSidebarSection>
+                  <DashboardSidebarItem active={view() === "home"} onClick={() => setView("home")} icon="home" label="Home" />
+                </DashboardSidebarSection>
+                <DashboardSidebarSection title="Projects">
+                  <DashboardSidebarItem active={projectScope().kind === "all" && view() === "projects"} onClick={() => setView("projects")} icon="view-grid" label="All" />
+                  <DashboardSidebarItem active={view() === "drafts"} onClick={() => setView("drafts")} icon="navigation.folder" label="Drafts" />
+                  <DashboardSidebarCollections
+                    collections={collections()}
+                    activeId={view() === "projects" ? collectionId() : null}
+                    onOpen={openCollection}
+                  />
+                </DashboardSidebarSection>
+              </>
             }
           >
             <DashboardSidebarSection>
@@ -178,8 +189,8 @@ export function DashboardPage() {
           <Match when={view() === "home"}>
             <DashboardHomeView />
           </Match>
-          <Match when={view() === "projects"}>
-            <DashboardProjectsView />
+          <Match when={view() === "projects" || view() === "drafts"}>
+            <DashboardProjectsView scope={projectScope()} />
           </Match>
           <Match when={view() === "ai-credits"}>
             <DashboardAiCreditsView />

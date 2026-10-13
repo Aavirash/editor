@@ -98,7 +98,8 @@ async function writePackage(dir: string, pkg: PackageJson): Promise<void> {
 // Identity
 
 // A project is named twice: `displayName` is what the user calls it and the
-// folder is what the disk calls it, and renaming moves both. Neither can be
+// folder is what the disk calls it, and either can change apart from the
+// other (the app renames the one, the user moves the other). Neither can be
 // the project's identity, so the record carries an id that nothing renames —
 // it is what the app's URLs point at, and what the editor keys the open world
 // by. Top level rather than inside `diffusion`, which `writeConfig` replaces
@@ -153,54 +154,121 @@ async function describe(dir: string): Promise<ProjectInfo | null> {
     entry,
     modifiedAt: file.mtime.toISOString(),
     createdAt: folder.birthtime.toISOString(),
+    draft: isDraft(dir),
   };
 }
 
 export const getProject = (dir: string): Promise<ProjectInfo | null> => describe(dir);
 
+// ---------------------------------------------------------------------------
+// Drafts
+
+// A new project starts as a draft: a folder the app makes without asking,
+// in a place of its own, named after the id. Saving it (⌘S) is when the user
+// says where it goes and what the folder is called — the folder moves there,
+// and from then on it is an ordinary project.
+
 /**
- * The folder projects go in when the user has not picked one. `~/Movies` on
- * macOS, `Videos` elsewhere — chosen because it is the one media folder the
- * sync services leave alone: iCloud's "Desktop & Documents Folders" covers
- * only those two, and OneDrive's Known Folder Move only Desktop, Documents,
- * and Pictures. It also needs no macOS permission prompt, which Documents and
- * Desktop do. Created on demand, so a user who never makes a project never
- * gets the folder.
- *
- * Null when it turns out to be synced after all and the user would rather
- * pick somewhere else — the caller falls back to `pickRoot`.
+ * The folder drafts live in. Inside the app's own data, which nothing syncs —
+ * neither iCloud nor OneDrive reaches `Application Support` or `AppData` —
+ * and which needs no permission prompt. On Windows the Local AppData rather
+ * than the Roaming one, which a roaming profile would carry, media and all,
+ * from machine to machine.
  */
-export async function defaultRoot(window: BrowserWindow | null): Promise<string | null> {
+export function draftsRoot(): string {
+  const local = process.platform === "win32" ? process.env.LOCALAPPDATA : undefined;
+  const base = local ? join(local, basename(app.getPath("userData"))) : app.getPath("userData");
+  return join(base, "Drafts");
+}
+
+/** Whether `dir` is a draft's folder: directly inside `draftsRoot`. */
+function isDraft(dir: string): boolean {
+  const parent = dirname(resolve(dir));
+  const root = draftsRoot();
+  return process.platform === "win32" ? parent.toLowerCase() === root.toLowerCase() : parent === root;
+}
+
+/**
+ * Where the save picker starts when no project has been saved yet: a folder
+ * under `~/Movies` on macOS, `Videos` elsewhere — the one media folder the
+ * sync services leave alone (iCloud's "Desktop & Documents Folders" covers
+ * only those two, OneDrive's Known Folder Move only Desktop, Documents, and
+ * Pictures), and one that needs no macOS permission prompt. Created on
+ * demand, so a user who never saves a project never gets the folder.
+ */
+async function defaultSaveFolder(): Promise<string> {
   const dir = join(app.getPath("videos"), "Diffusion Studio");
-  if (!(await confirmCloudLocation(window, dir, "Choose another folder"))) return null;
   await mkdir(dir, { recursive: true });
   return dir;
 }
 
-export async function pickRoot(window: BrowserWindow | null): Promise<string | null> {
-  const options: Electron.OpenDialogOptions = {
-    title: "Choose projects folder",
-    defaultPath: app.getPath("videos"),
-    properties: ["openDirectory", "createDirectory"],
+/** Characters no folder name can hold on one platform or another. */
+const UNSAFE_NAME = /[\\/:*?"<>|]+/g;
+
+/** Why the project in `dir` cannot be saved or moved as `target`, or null when it can. */
+async function saveProblem(dir: string, target: string): Promise<string | null> {
+  if (await exists(target)) {
+    return `"${basename(target)}" already exists in ${basename(dirname(target))}. Choose another name.`;
+  }
+  const inside = relative(resolve(dir), resolve(target));
+  if (!inside.startsWith("..") && !isAbsolute(inside)) return "A project can't be saved inside itself.";
+  if (isDraft(target)) return "Choose a folder outside the drafts folder.";
+  return null;
+}
+
+/** What the save picker is asked for: saving a draft, or moving a saved project. */
+export type SaveAction = "save" | "move";
+
+/**
+ * Asks where to save the draft in `dir`, or where to move the project there:
+ * the folder it will become, or null when the user cancels. Starts in
+ * `startIn` — the parent of the last project saved — with `name` filled in.
+ * A name that is taken is refused rather than replaced, and a synced folder
+ * is warned about; either way the picker comes back, since the user came here
+ * to save.
+ */
+export async function pickSaveLocation(
+  window: BrowserWindow | null,
+  dir: string,
+  name: string,
+  startIn: string | null,
+  action: SaveAction = "save",
+): Promise<string | null> {
+  const start = startIn && (await stat(startIn).catch(() => null))?.isDirectory() ? startIn : await defaultSaveFolder();
+  const folder = name.replace(UNSAFE_NAME, "-").trim() || basename(dir);
+  const options: Electron.SaveDialogOptions = {
+    title: action === "move" ? "Move project" : "Save project",
+    buttonLabel: action === "move" ? "Move" : "Save",
+    defaultPath: join(start, folder),
+    properties: ["createDirectory", "showOverwriteConfirmation"],
   };
 
-  // Declining a synced folder reopens the picker rather than dropping the
-  // user back to the dashboard: they came here to choose one.
   while (true) {
-    const { canceled, filePaths } = window
-      ? await dialog.showOpenDialog(window, options)
-      : await dialog.showOpenDialog(options);
-    if (canceled || !filePaths[0]) return null;
-    if (await confirmCloudLocation(window, filePaths[0], "Choose another folder")) {
-      return filePaths[0];
+    const { canceled, filePath } = window
+      ? await dialog.showSaveDialog(window, options)
+      : await dialog.showSaveDialog(options);
+    if (canceled || !filePath) return null;
+    options.defaultPath = filePath;
+
+    const problem = await saveProblem(dir, filePath);
+    if (problem) {
+      const message: Electron.MessageBoxOptions = {
+        type: "warning",
+        message: action === "move" ? "Can't move here" : "Can't save here",
+        detail: problem,
+      };
+      if (window) await dialog.showMessageBox(window, message);
+      else await dialog.showMessageBox(message);
+      continue;
     }
+    if (await confirmCloudLocation(window, filePath, "Choose another folder")) return filePath;
   }
 }
 
 /**
- * A folder to open as a single project, wherever it lives. Unlike `pickRoot`
- * this leaves the projects root alone, and it does not vet the location: the
- * folder goes through `initProject`, which asks about a synced one there.
+ * A folder to open as a single project, wherever it lives. It does not vet
+ * the location: the folder goes through `initProject`, which asks about a
+ * synced one there.
  */
 export async function pickFolder(window: BrowserWindow | null): Promise<string | null> {
   const options: Electron.OpenDialogOptions = {
@@ -381,24 +449,52 @@ async function confirmCloudLocation(
   return response === 1;
 }
 
-/** Direct child folders of `root` that could hold a project, in a stable order. */
-async function childDirs(root: string): Promise<string[]> {
-  const entries = await readdir(root, { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules")
-    .map((entry) => entry.name)
-    .sort()
-    .map((name) => join(root, name));
+/**
+ * The project `id` in a folder beside `dir`, which no longer holds it: one
+ * renamed in Finder, or moved to another folder next to it. Found by the id in
+ * its record, which goes wherever the folder goes. Null when no sibling holds
+ * it, or `dir`'s parent is gone too. Reads only.
+ */
+export async function findMovedProject(dir: string, id: string): Promise<ProjectInfo | null> {
+  if (!id) return null;
+  const parent = dirname(dir);
+  let entries;
+  try {
+    entries = await readdir(parent, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    const candidate = join(parent, entry.name);
+    if (recordedId(await readPackage(candidate)) === id) return describe(candidate);
+  }
+  return null;
 }
 
-/**
- * Every direct child folder of `root` that holds an entry file. The one
- * search of the disk for projects there is: the app runs it when a projects
- * root is chosen, to put the projects already in it on its list. Reads only.
- */
-export async function scanProjects(root: string): Promise<ProjectInfo[]> {
-  const projects = await Promise.all((await childDirs(root)).map(describe));
-  return projects.filter((project): project is ProjectInfo => project !== null);
+/** What the user wants done about a project whose folder can't be found. */
+export type MissingProjectChoice = "locate" | "remove" | "cancel";
+
+/** Tells the user the project's folder is gone, and asks what to do about it. */
+export async function askAboutMissingProject(
+  window: BrowserWindow | null,
+  displayName: string,
+  dir: string,
+): Promise<MissingProjectChoice> {
+  const options: Electron.MessageBoxOptions = {
+    type: "warning",
+    message: `Can't find "${displayName}"`,
+    detail: `It was in ${dir}. It may have been moved, renamed or deleted, or be on a disk that isn't connected.`,
+    buttons: ["Locate...", "Remove from List", "Cancel"],
+    defaultId: 0,
+    cancelId: 2,
+  };
+  const { response } = window
+    ? await dialog.showMessageBox(window, options)
+    : await dialog.showMessageBox(options);
+  if (response === 0) return "locate";
+  if (response === 1) return "remove";
+  return "cancel";
 }
 
 /**
@@ -416,17 +512,6 @@ export async function resolveProject(dir: string): Promise<ProjectInfo | null> {
 
 // ---------------------------------------------------------------------------
 // Scaffold
-
-/** Folder-safe project name: "Golden River 15 Aug" -> "golden-river-15-aug". */
-function folderName(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9._-]+/g, "-")
-      .replace(/^[-.]+|[-.]+$/g, "")
-      .slice(0, 64) || "project"
-  );
-}
 
 /** `base`, or `base-2`, `base-3`... when the folder is taken. */
 async function freeFolder(root: string, base: string): Promise<string> {
@@ -742,87 +827,109 @@ export async function initProject(window: BrowserWindow | null, dir: string): Pr
   return project;
 }
 
+/** What a new project is called until it is saved under a name of the user's. */
+const DRAFT_NAME = "Untitled";
+
 /**
- * Creates a fresh project folder under `root`, named after `displayName`. A
- * taken name is numbered rather than refused: the folder is a label, the id
- * inside it is the project.
+ * Creates a fresh project as a draft: a folder in `draftsRoot` named after
+ * the id it is given here, so creating one asks nothing. `saveProject` is
+ * what gives it a place and a name of the user's choosing.
  */
-export async function createProject(root: string, displayName: string): Promise<ProjectInfo> {
-  const dir = join(root, await freeFolder(root, folderName(displayName)));
+export async function createProject(): Promise<ProjectInfo> {
+  const id = nanoid();
+  const dir = join(draftsRoot(), id);
   await mkdir(dir, { recursive: true });
-  await scaffold(dir, displayName);
+  // The record first, so the scaffold keeps the id the folder is named after.
+  await writePackage(dir, { ...packageJson(DRAFT_NAME, DRAFT_NAME), projectId: id });
+  await scaffold(dir, DRAFT_NAME);
   const project = await describe(dir);
   if (!project) throw new Error("Failed to scaffold the project.");
   return project;
 }
 
 /**
- * Renames the project: the human name in the record, and the folder with it,
- * so what the user sees in Finder keeps matching what they see in the app.
- * This is the only thing here that moves a folder — nothing syncs the two
- * behind the user's back — and it costs the project neither its identity nor
- * its links, both of which are the id.
+ * Renames the project: the human name in the record, and nothing else. The
+ * folder keeps its name — moving it is the user's to do, by hand — and the id
+ * the project goes by is untouched either way.
  */
 export async function renameProject(dir: string, displayName: string): Promise<ProjectInfo> {
   const pkg = (await readPackage(dir)) ?? packageJson(basename(dir), displayName);
-  const name = displayName.trim() || basename(dir);
-  await writePackage(dir, { ...pkg, displayName: name });
+  await writePackage(dir, { ...pkg, displayName: displayName.trim() || basename(dir) });
 
-  const project = await describe(await renameFolder(dir, name));
+  const project = await describe(dir);
   if (!project) throw new Error("Not a project folder.");
   return project;
 }
 
 /**
- * Moves the project folder to match `displayName`; answers where it ended up.
- * Best effort by design: the folder can be locked, open elsewhere, or on a
- * volume that will not have it, and none of that should cost the user the
- * name they just typed.
+ * Copies the folder next to itself as `<name>-copy` (numbered when taken); a
+ * draft's copy is a draft too, named after its own id.
  */
-async function renameFolder(dir: string, displayName: string): Promise<string> {
-  const root = dirname(dir);
-  const base = folderName(displayName);
-  const current = basename(dir);
-  // Already named after it, numbered suffix and all: moving `my-clip-2` to
-  // `my-clip` (or to `my-clip-3`) shuffles folders that are equally right.
-  if (current === base || (current.startsWith(`${base}-`) && /^\d+$/.test(current.slice(base.length + 1)))) {
-    return dir;
-  }
-
-  try {
-    const target = join(root, await freeFolder(root, base));
-    // The watcher holds the old path, and the renderer re-watches the new one
-    // as soon as it hears where the project went.
-    unwatchProject(dir);
-    await rename(dir, target);
-    return target;
-  } catch {
-    return dir;
-  }
-}
-
-/** Copies the folder next to itself as `<name>-copy` (numbered when taken). */
 export async function duplicateProject(dir: string): Promise<ProjectInfo> {
   const source = await describe(dir);
   if (!source) throw new Error("Not a project folder.");
 
+  const id = nanoid();
   const root = dirname(dir);
-  const target = join(root, await freeFolder(root, `${source.name}-copy`));
+  const target = source.draft ? join(root, id) : join(root, await freeFolder(root, `${source.name}-copy`));
 
   await cp(dir, target, { recursive: true, errorOnExist: true, force: false });
   // The record came along with everything else, id included, and two folders
-  // answering to one id is the thing the id exists to prevent. The folder is
-  // already named for the copy, so the record is written here rather than
-  // through `renameProject` (which would move it again).
+  // answering to one id is the thing the id exists to prevent.
   const pkg = await readPackage(target);
   await writePackage(target, {
     ...(pkg ?? packageJson(basename(target), source.displayName)),
-    projectId: nanoid(),
+    projectId: id,
     displayName: `${source.displayName} (Copy)`,
   });
   const project = await describe(target);
   if (!project) throw new Error("Failed to duplicate the project.");
   return project;
+}
+
+/**
+ * Saves the draft in `dir` as `target`: moves its folder there and names the
+ * project after it — the name the user typed in the save picker, which is
+ * the draft's own unless they changed it. Writes still on their way into the
+ * draft land first; whoever has it open lets go of the folder before asking
+ * (see `ProjectProvider` in the web app), and opens it again where it went.
+ */
+export async function saveProject(dir: string, target: string): Promise<ProjectInfo> {
+  if (!isDraft(dir)) throw new Error("This project is saved already.");
+  await moveFolder(dir, target);
+  return renameProject(target, basename(target));
+}
+
+/**
+ * Moves the saved project in `dir` to `target`, as saving moves a draft —
+ * but it keeps its name, which is the user's already. A draft is saved
+ * rather than moved.
+ */
+export async function moveProject(dir: string, target: string): Promise<ProjectInfo> {
+  if (isDraft(dir)) throw new Error("Save the draft instead of moving it.");
+  await moveFolder(dir, target);
+  const project = await describe(target);
+  if (!project) throw new Error("Failed to move the project.");
+  return project;
+}
+
+/** Moves the project folder `dir` to `target`, once whatever is on its way into it has landed. */
+async function moveFolder(dir: string, target: string): Promise<void> {
+  if (!isAbsolute(target)) throw new Error(`The project folder must be an absolute path (got "${target}").`);
+  const problem = await saveProblem(dir, target);
+  if (problem) throw new Error(problem);
+
+  await settleWrites(dir);
+  unwatchProject(dir);
+  await mkdir(dirname(target), { recursive: true });
+  try {
+    await rename(dir, target);
+  } catch (error) {
+    // Another volume: there is no moving a folder there, only copying it.
+    if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
+    await cp(dir, target, { recursive: true, errorOnExist: true, force: false });
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -955,11 +1062,45 @@ export async function compileProject(dir: string): Promise<CompileResult> {
  * (see `noteContent`).
  */
 export async function writeProject(dir: string, edits: SourceEdit[]): Promise<WriteResult> {
+  const finish = startWrite(dir);
   try {
     return await applyEdits(sourceContext(dir), edits);
   } catch (error) {
     return { skipped: edits.map(editLabel), error: error instanceof Error ? error.message : String(error) };
+  } finally {
+    finish();
   }
+}
+
+/**
+ * Writes into a project that have not finished yet, by folder. Saving a draft
+ * moves its folder, and waits these out first (see `settleWrites`): one that
+ * lost the race would fail, or put a file back in the folder that just left.
+ * A write starts before its first await, so one asked for before the save is
+ * always among them.
+ */
+const writes = new Map<string, Set<Promise<void>>>();
+
+/** Marks a write into `dir` as running; call what it returns when the write is done. */
+function startWrite(dir: string): () => void {
+  let release!: () => void;
+  const done = new Promise<void>((resolve) => (release = resolve));
+  const running = writes.get(dir) ?? new Set<Promise<void>>();
+  writes.set(dir, running);
+  running.add(done);
+
+  return () => {
+    release();
+    running.delete(done);
+    if (!running.size && writes.get(dir) === running) {
+      writes.delete(dir);
+    }
+  };
+}
+
+/** Settles once every write into `dir` asked for so far has, however it went. */
+async function settleWrites(dir: string): Promise<void> {
+  await Promise.allSettled([...(writes.get(dir) ?? []), configWrites.get(dir)]);
 }
 
 // ---------------------------------------------------------------------------
@@ -997,11 +1138,16 @@ export async function readManifest(dir: string): Promise<unknown> {
  * claimed first so the watcher does not hand it back as a change.
  */
 export async function writeManifest(dir: string, manifest: unknown): Promise<void> {
-  const path = join(dir, MANIFEST_FILE);
-  const text = `# Diffusion Studio asset library. Edited by the app; hand edits are read on the next load.
+  const finish = startWrite(dir);
+  try {
+    const path = join(dir, MANIFEST_FILE);
+    const text = `# Diffusion Studio asset library. Edited by the app; hand edits are read on the next load.
 ${stringifyYaml(manifest, { lineWidth: 0 })}`;
-  noteContent(path, text);
-  await writeFileAtomic(path, text);
+    noteContent(path, text);
+    await writeFileAtomic(path, text);
+  } finally {
+    finish();
+  }
 }
 
 // ---------------------------------------------------------------------------

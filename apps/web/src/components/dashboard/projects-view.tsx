@@ -3,9 +3,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { toast } from "somoto";
-import { For, createMemo, createResource, createSignal } from "solid-js";
+import { For, Show, createMemo, createSignal } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -20,43 +21,62 @@ import {
   DashboardCardPreview,
   DashboardViewSection,
   createNewProject,
+  createProjectList,
   openProjectFromList,
 } from "./shared";
 import { DeleteProjectDialog } from "./delete-project-dialog";
 import { DashboardProjectCard } from "./project-card";
+import { createProjectSelection } from "./selection";
 import { parseTimestamp } from "./utils";
 import { DashboardSearchPanel } from "./search-bar";
-import { DashboardProjectsFolderBar } from "./projects-folder-bar";
 import { projectRoute, useReturnHere } from "@/hooks/use-project-route";
 import { Icon } from "../ui/icon";
 import { track } from "@/lib/analytics";
-import {
-  listProjects,
-  projectKey,
-  projectsRevision,
-  type ProjectInfo,
-} from "@/projects";
+import { isDesktop, openProjectFolder, pickProjectFolder, projectKey, type ProjectInfo } from "@/projects";
 
-import type { ProjectSortOption } from "./types";
+import type { ProjectScope, ProjectSortOption } from "./types";
 
-export function DashboardProjectsView() {
+type DashboardProjectsViewProps = {
+  scope: ProjectScope;
+};
+
+const scopeTitle = (scope: ProjectScope): string => {
+  if (scope.kind === "drafts") return "Drafts";
+  if (scope.kind === "collection") return scope.collection.name;
+  return "All projects";
+};
+
+/** The id of the collection `scope` lists, if it lists one. */
+const scopeCollectionId = (scope: ProjectScope): string | undefined =>
+  scope.kind === "collection" ? scope.collection.id : undefined;
+
+export function DashboardProjectsView(props: DashboardProjectsViewProps) {
   const navigate = useNavigate();
   const returnHere = useReturnHere();
   const [search, setSearch] = createSignal("");
   const [sort, setSort] = createSignal<ProjectSortOption>("last-viewed");
-  const [projects, { refetch: refetchProjects }] = createResource(projectsRevision, () => listProjects());
-  const [selectedProject, setSelectedProject] = createSignal<string | null>(null);
+  const [projects, { refetch: refetchProjects }] = createProjectList();
   const [creating, setCreating] = createSignal(false);
-  const [pendingDelete, setPendingDelete] = createSignal<ProjectInfo | null>(null);
+  const [picking, setPicking] = createSignal(false);
+  const [pendingDelete, setPendingDelete] = createSignal<ProjectInfo[]>([]);
+  const [grid, setGrid] = createSignal<HTMLDivElement>();
 
   const selectedSortOption = () =>
     SORT_OPTIONS.find((option) => option.id === sort()) ?? SORT_OPTIONS[0];
 
   const normalizedSearch = createMemo(() => search().trim().toLowerCase());
 
+  const scopedProjects = createMemo(() => {
+    const scope = props.scope;
+    const entries = projects() ?? [];
+    if (scope.kind === "drafts") return entries.filter((project) => project.draft);
+    if (scope.kind === "collection") return entries.filter((project) => project.collectionId === scope.collection.id);
+    return entries;
+  });
+
   const filteredProjects = createMemo(() => {
     const query = normalizedSearch();
-    const entries = projects() ?? [];
+    const entries = scopedProjects();
     if (!query) return entries;
 
     return entries.filter((project) => project.displayName.toLowerCase().includes(query));
@@ -80,6 +100,12 @@ export function DashboardProjectsView() {
     return entries;
   });
 
+  const selection = createProjectSelection({
+    projects: sortedProjects,
+    grid,
+    onDelete: setPendingDelete,
+  });
+
   const openProject = async (project: ProjectInfo) => {
     const found = await openProjectFromList(project);
     if (!found) return;
@@ -87,8 +113,8 @@ export function DashboardProjectsView() {
     navigate(projectRoute(projectKey(found)), { state: returnHere() });
   };
 
-  const handleDeleted = (project: ProjectInfo) => {
-    setSelectedProject((current) => (current === project.dir ? null : current));
+  const handleDeleted = () => {
+    selection.clear();
     refetchProjects();
   };
 
@@ -100,7 +126,7 @@ export function DashboardProjectsView() {
     setCreating(true);
 
     try {
-      const project = await createNewProject();
+      const project = await createNewProject(scopeCollectionId(props.scope));
       if (!project) return;
       refetchProjects();
       openProject(project);
@@ -111,18 +137,39 @@ export function DashboardProjectsView() {
     }
   };
 
+  const handleOpenFolder = async () => {
+    if (picking()) return;
+    setPicking(true);
+
+    try {
+      const dir = await pickProjectFolder();
+      if (!dir) return;
+      await openProjectFolder(dir, scopeCollectionId(props.scope));
+    } catch (e) {
+      toast.error("Failed to open project", { description: (e as Error).message });
+    } finally {
+      setPicking(false);
+    }
+  };
+
   return (
     <DashboardSearchPanel
       value={search}
       onChange={setSearch}
-      placeholder="Search in projects"
+      placeholder={props.scope.kind === "all" ? "Search in projects" : `Search in ${scopeTitle(props.scope)}`}
     >
       <DashboardViewSection
         class="pb-4"
-        title="Recent projects"
-        onBackgroundClick={() => setSelectedProject(null)}
+        title={scopeTitle(props.scope)}
+        onBackgroundClick={selection.clear}
+        gridRef={setGrid}
         controls={
-          <>
+          <div class="flex items-center gap-2">
+            <Show when={isDesktop() && props.scope.kind !== "drafts"}>
+              <Button variant="secondary" disabled={picking()} onClick={handleOpenFolder}>
+                Open project...
+              </Button>
+            </Show>
             <Select<(typeof SORT_OPTIONS)[number]>
               options={SORT_OPTIONS}
               value={selectedSortOption()}
@@ -144,7 +191,7 @@ export function DashboardProjectsView() {
                 <SelectContent />
               </SelectPortal>
             </Select>
-          </>
+          </div>
         }
       >
         <DashboardCardButton onClick={handleCreateProject}>
@@ -156,25 +203,25 @@ export function DashboardProjectsView() {
           </DashboardCardPreview>
           <DashboardCardMeta title="New project" />
         </DashboardCardButton>
-        <For each={sortedProjects().slice(0, MAX_VISIBLE_PROJECTS)}>
+        <For each={sortedProjects()}>
           {(project) => (
             <DashboardProjectCard
               project={project}
-              active={selectedProject() === project.dir}
-              onSelect={() => setSelectedProject(project.dir)}
-              onDeselect={() => setSelectedProject(null)}
+              active={selection.isSelected(project)}
+              targets={selection.targets(project)}
+              onSelect={(event) => selection.click(project, event)}
+              onContextMenu={() => selection.contextMenu(project)}
               onOpen={() => openProject(project)}
-              onDelete={() => setPendingDelete(project)}
+              onDelete={() => setPendingDelete(selection.targets(project))}
               onChanged={refetchProjects}
             />
           )}
         </For>
       </DashboardViewSection>
-      <DashboardProjectsFolderBar />
 
       <DeleteProjectDialog
-        project={pendingDelete()}
-        onClose={() => setPendingDelete(null)}
+        projects={pendingDelete()}
+        onClose={() => setPendingDelete([])}
         onDeleted={handleDeleted}
       />
     </DashboardSearchPanel>
@@ -186,5 +233,3 @@ const SORT_OPTIONS: Array<{ id: ProjectSortOption; label: string }> = [
   { id: "alphabetical", label: "Alphabetical" },
   { id: "date-created", label: "Date created" },
 ];
-
-const MAX_VISIBLE_PROJECTS = 11;

@@ -16,6 +16,7 @@ import { cliStatus, installCli, refreshCliShim, uninstallCli } from "./cli-insta
 import { applyMcp, healMcpRegistrations, mcpStatus } from "./mcp-install";
 import { configureAnalytics, countCanvasEdits, startAnalytics, track } from "./analytics";
 import { setupAppMenu } from "./menu";
+import { installedEditors, openInEditor } from "./editors";
 import { AppTray } from "./tray";
 import { WindowHost } from "./window-host";
 import { handleSquirrelEvent } from "./squirrel";
@@ -24,16 +25,18 @@ import { MAIN_CHANNELS } from "./main-channels";
 import {
   compileProject,
   createProject,
-  defaultRoot,
   deleteProject,
   duplicateProject,
   getProject,
+  askAboutMissingProject,
+  findMovedProject,
   initProject,
   pickFolder,
-  pickRoot,
+  pickSaveLocation,
   renameProject,
   resolveProject,
-  scanProjects,
+  saveProject,
+  moveProject,
   unwatchAll,
   listEntries,
   realPathEntry,
@@ -356,6 +359,8 @@ if (squirrelLaunch) {
 
   mainBridge.handle(MAIN_CHANNELS.APP_OPEN_EXTERNAL, ({ url }) => shell.openExternal(url));
   mainBridge.handle(MAIN_CHANNELS.APP_SHOW_IN_FOLDER, ({ path }) => shell.showItemInFolder(path));
+  mainBridge.handle(MAIN_CHANNELS.APP_EDITORS_LIST, () => installedEditors());
+  mainBridge.handle(MAIN_CHANNELS.APP_OPEN_IN_EDITOR, ({ id, dir }) => openInEditor(id, dir));
   mainBridge.handle(MAIN_CHANNELS.ANALYTICS_CONFIGURE, (config) => configureAnalytics(config));
   mainBridge.handle(MAIN_CHANNELS.AUTH_GET_PENDING_CALLBACK, () =>
     takePendingDeepLink(MAIN_CHANNELS.AUTH_CALLBACK),
@@ -382,16 +387,20 @@ if (squirrelLaunch) {
   mainBridge.handle(MAIN_CHANNELS.CLI_STATUS, () => cliStatus());
   mainBridge.handle(MAIN_CHANNELS.CLI_INSTALL, () => installCli());
   mainBridge.handle(MAIN_CHANNELS.CLI_UNINSTALL, () => uninstallCli());
-  mainBridge.handle(MAIN_CHANNELS.PROJECTS_PICK_ROOT, () => pickRoot(mainWindow));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_PICK_FOLDER, () => pickFolder(mainWindow));
-  mainBridge.handle(MAIN_CHANNELS.PROJECTS_DEFAULT_ROOT, () => defaultRoot(mainWindow));
-  mainBridge.handle(MAIN_CHANNELS.PROJECTS_SCAN, ({ root }) => scanProjects(root));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_GET, ({ dir }) => getProject(dir));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_INIT, ({ dir }) => initProject(mainWindow, dir));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_RESOLVE, ({ dir }) => resolveProject(dir));
-  mainBridge.handle(MAIN_CHANNELS.PROJECTS_CREATE, ({ root, displayName }) =>
-    createProject(root, displayName),
+  mainBridge.handle(MAIN_CHANNELS.PROJECTS_FIND_MOVED, ({ dir, id }) => findMovedProject(dir, id));
+  mainBridge.handle(MAIN_CHANNELS.PROJECTS_ASK_MISSING, ({ displayName, dir }) =>
+    askAboutMissingProject(mainWindow, displayName, dir),
   );
+  mainBridge.handle(MAIN_CHANNELS.PROJECTS_CREATE, () => createProject());
+  mainBridge.handle(MAIN_CHANNELS.PROJECTS_PICK_SAVE, ({ dir, name, startIn, action }) =>
+    pickSaveLocation(mainWindow, dir, name, startIn, action),
+  );
+  mainBridge.handle(MAIN_CHANNELS.PROJECTS_SAVE, ({ dir, target }) => saveProject(dir, target));
+  mainBridge.handle(MAIN_CHANNELS.PROJECTS_MOVE, ({ dir, target }) => moveProject(dir, target));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_RENAME, ({ dir, displayName }) => renameProject(dir, displayName));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_DUPLICATE, ({ dir }) => duplicateProject(dir));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_DELETE, ({ dir }) => deleteProject(dir).then(deleteProjectChats));

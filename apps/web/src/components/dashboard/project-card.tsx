@@ -2,53 +2,67 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { Show, batch, createSignal } from "solid-js";
+import { For, Show, batch, createResource, createSignal } from "solid-js";
 import { toast } from "somoto";
 
 import {
   ContextMenu,
+  ContextMenuCheckboxItem,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuPortal,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { TextField, TextFieldInput } from "@/components/ui/text-field";
 import { track } from "@/lib/analytics";
-import { duplicateProject, renameProject, type ProjectRecord } from "@/projects";
+import { listEditors, openInEditor, revealPath, type EditorInfo } from "@/lib/shell";
+import {
+  duplicateProject,
+  isWindowsDesktop,
+  listCollections,
+  moveProjectsToCollection,
+  renameProject,
+  type ProjectRecord,
+} from "@/projects";
 
 import { DashboardCardButton, DashboardCardPreview, DashboardProjectThumbnail } from "./shared";
 import { formatEditedAt } from "./utils";
 
 type DashboardProjectCardProps = {
   project: ProjectRecord;
-  /** Whether the card is the selected one in its grid. */
+  /** Whether the card is selected in its grid. */
   active: boolean;
-  /** A single click, or a right-click, landed on the card. */
-  onSelect: () => void;
-  /** Escape was pressed on the card. */
-  onDeselect: () => void;
+  /** What the menu acts on: the selection the card is in, or the card alone. */
+  targets: ProjectRecord[];
+  /** A click, with its modifiers, or Space, without, landed on the card. */
+  onSelect: (event?: MouseEvent) => void;
+  /** A right-click landed on the card. */
+  onContextMenu: () => void;
   /** The card was double-clicked, or Open chosen from the menu. */
   onOpen: () => void;
-  /** Delete was pressed on the card, or chosen from the menu. */
+  /** Delete was chosen from the menu, for the targets. */
   onDelete: () => void;
-  /**
-   * A rename or duplicate changed the projects on disk; the owner refetches
-   * its list. Called after a rename regardless of outcome, since the folder
-   * moves with the name and the list is stale either way.
-   */
+  /** A rename or duplicate changed the projects on disk; the owner refetches its list. */
   onChanged: () => void;
 };
 
 /**
  * A project in a dashboard grid: thumbnail, name, and last-edited time, with
- * the context menu that opens, renames, duplicates, and deletes it. Rename
- * happens inline, in place of the name, and lives here so every grid that
- * shows projects gets the same menu.
+ * the context menu that opens it (here, in the file manager, or in a code
+ * editor), renames, duplicates, files it in a collection, and deletes it.
+ * Rename happens inline, in place of the name, and lives here so every grid
+ * that shows projects gets the same menu. With more than one project
+ * selected, the menu only duplicates, files, and deletes them all.
  */
 export function DashboardProjectCard(props: DashboardProjectCardProps) {
   const [renaming, setRenaming] = createSignal(false);
   const [renameDraft, setRenameDraft] = createSignal("");
+  const [editors] = createResource(listEditors, { initialValue: [] });
+  const multiple = () => props.targets.length > 1;
 
   const startRenaming = () => {
     batch(() => {
@@ -69,13 +83,32 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
     props.onOpen();
   };
 
+  const handleReveal = async () => {
+    try {
+      await revealPath(props.project.dir);
+    } catch (e) {
+      toast.error("Failed to show the folder", { description: (e as Error).message });
+    }
+  };
+
+  const handleOpenInEditor = async (editor: EditorInfo) => {
+    try {
+      await openInEditor(editor.id, props.project.dir);
+    } catch (e) {
+      toast.error(`Failed to open in ${editor.label}`, { description: (e as Error).message });
+    }
+  };
+
   const handleDuplicate = async () => {
     try {
-      await duplicateProject(props.project.dir);
-      track("project_duplicated");
-      props.onChanged();
+      for (const project of props.targets) {
+        await duplicateProject(project.dir);
+        track("project_duplicated");
+      }
     } catch (e) {
       toast.error("Failed to duplicate project", { description: (e as Error).message });
+    } finally {
+      props.onChanged();
     }
   };
 
@@ -94,7 +127,6 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
 
   const handleBlurRenameInput = () => {
     stopRenaming();
-    props.onChanged();
   };
 
   const handleKeyDownRenameInput = async (event: KeyboardEvent) => {
@@ -106,7 +138,6 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
       event.stopPropagation();
 
       stopRenaming();
-      props.onChanged();
       input.blur();
     }
 
@@ -114,18 +145,16 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
       event.preventDefault();
       event.stopPropagation();
 
-      // The folder moves with the name, so the list is refetched rather than
-      // patched: every path in it has just changed.
       if (trimmedName.length > 0 && renaming()) {
         try {
           await renameProject(props.project.dir, trimmedName);
+          props.onChanged();
         } catch (e) {
           toast.error("Failed to rename project", { description: (e as Error).message });
         }
       }
 
       stopRenaming();
-      props.onChanged();
       input.blur();
     }
   };
@@ -134,7 +163,7 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
     <ContextMenu
       modal={false}
       onOpenChange={(open) => {
-        if (open) props.onSelect();
+        if (open) props.onContextMenu();
       }}
     >
       <ContextMenuTrigger as="div" class="contents">
@@ -142,8 +171,6 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
           active={props.active}
           onClick={props.onSelect}
           onDoubleClick={handleOpen}
-          onEscape={props.onDeselect}
-          onDelete={props.onDelete}
         >
           <DashboardCardPreview>
             <DashboardProjectThumbnail cover={props.project.cover} />
@@ -182,14 +209,79 @@ export function DashboardProjectCard(props: DashboardProjectCardProps) {
       </ContextMenuTrigger>
       <ContextMenuPortal>
         <ContextMenuContent class="w-45 gap-0">
-          <ContextMenuItem onSelect={handleOpen}>Open</ContextMenuItem>
-          <ContextMenuSeparator class="my-2" />
-          <ContextMenuItem onSelect={startRenaming}>Rename</ContextMenuItem>
-          <ContextMenuItem onSelect={handleDuplicate}>Duplicate</ContextMenuItem>
-          <ContextMenuSeparator class="my-2" />
-          <ContextMenuItem onSelect={props.onDelete}>Delete</ContextMenuItem>
+          <Show
+            when={!multiple()}
+            fallback={
+              <>
+                <ContextMenuItem onSelect={handleDuplicate}>Duplicate {props.targets.length} projects</ContextMenuItem>
+                <MoveToMenu projects={props.targets} />
+                <ContextMenuSeparator class="my-2" />
+                <ContextMenuItem onSelect={props.onDelete}>Delete {props.targets.length} projects</ContextMenuItem>
+              </>
+            }
+          >
+            <ContextMenuItem onSelect={handleOpen}>Open</ContextMenuItem>
+            <ContextMenuSeparator class="my-2" />
+            <ContextMenuItem onSelect={handleReveal}>
+              {isWindowsDesktop() ? "Show in Explorer" : "Show in Finder"}
+            </ContextMenuItem>
+            <For each={editors()}>
+              {(editor) => (
+                <ContextMenuItem onSelect={() => handleOpenInEditor(editor)}>Open in {editor.label}</ContextMenuItem>
+              )}
+            </For>
+            <ContextMenuSeparator class="my-2" />
+            <ContextMenuItem onSelect={startRenaming}>Rename</ContextMenuItem>
+            <ContextMenuItem onSelect={handleDuplicate}>Duplicate</ContextMenuItem>
+            <MoveToMenu projects={props.targets} />
+            <ContextMenuSeparator class="my-2" />
+            <ContextMenuItem onSelect={props.onDelete}>Delete</ContextMenuItem>
+          </Show>
         </ContextMenuContent>
       </ContextMenuPortal>
     </ContextMenu>
+  );
+}
+
+/**
+ * Move to ▸ every collection, checked for the one `projects` are filed in. A
+ * project is in one collection at most: checking another moves it there, and
+ * unchecking the checked one takes it back to the top level. Mounts with the
+ * menu, so the collections are read when it opens.
+ */
+function MoveToMenu(props: { projects: ProjectRecord[] }) {
+  const [collections] = createResource(listCollections, { initialValue: [] });
+  // Checked only when every project is in it, so a mixed selection checks none.
+  const isIn = (id: string) => props.projects.every((project) => project.collectionId === id);
+
+  const move = async (collectionId: string | undefined) => {
+    try {
+      await moveProjectsToCollection(props.projects.map((project) => project.dir), collectionId);
+    } catch (e) {
+      toast.error("Failed to move project", { description: (e as Error).message });
+    }
+  };
+
+  return (
+    <ContextMenuSub>
+      <ContextMenuSubTrigger>Move to</ContextMenuSubTrigger>
+      <ContextMenuPortal>
+        <ContextMenuSubContent class="w-45 gap-0">
+          <For
+            each={collections()}
+            fallback={<ContextMenuItem disabled>No folders</ContextMenuItem>}
+          >
+            {(collection) => (
+              <ContextMenuCheckboxItem
+                checked={isIn(collection.id)}
+                onChange={(checked) => move(checked ? collection.id : undefined)}
+              >
+                <span class="min-w-0 flex-1 truncate">{collection.name}</span>
+              </ContextMenuCheckboxItem>
+            )}
+          </For>
+        </ContextMenuSubContent>
+      </ContextMenuPortal>
+    </ContextMenuSub>
   );
 }

@@ -42,9 +42,8 @@ export function EditorPage() {
   const world = useWorld();
   const engine = useEngineContext();
 
-  // Keyed on the folder, not the project: a rename moves it, and everything
-  // below holds a path — the watcher, the library, the writer — so all of it
-  // is torn down and re-attached where the project now is.
+  // Everything below holds the folder's path — the watcher, the library, the
+  // writer — and is torn down with the editor.
   createEffect(() => {
     const dir = project.dir();
     if (!dir) return;

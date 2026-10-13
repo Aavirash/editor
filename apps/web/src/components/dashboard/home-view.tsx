@@ -8,7 +8,6 @@ import {
   Show,
   createEffect,
   createMemo,
-  createResource,
   createSignal,
   onCleanup,
 } from "solid-js";
@@ -23,7 +22,6 @@ import {
   DropdownMenuGroupLabel,
   DropdownMenuItem,
   DropdownMenuPortal,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
@@ -45,41 +43,34 @@ import {
 } from "@/agent-chat";
 import { projectRoute, useReturnHere } from "@/hooks/use-project-route";
 import { track } from "@/lib/analytics";
-import { generateProjectName } from "@/lib/db";
 import {
   createProject,
-  ensureProjectsRoot,
   isDesktop,
-  listProjects,
-  openProjectFolder,
-  pickProjectFolder,
   projectKey,
-  projectsRevision,
   type ProjectInfo,
 } from "@/projects";
 
 import { DeleteProjectDialog } from "./delete-project-dialog";
 import { DashboardProjectCard } from "./project-card";
+import { createProjectSelection } from "./selection";
 import {
   DashboardCardButton,
   DashboardCardMeta,
   DashboardCardPreview,
   createBackgroundClickHandler,
   createNewProject,
+  createProjectList,
   openProjectFromList,
 } from "./shared";
 import { parseTimestamp } from "./utils";
 
 /**
- * Where the prompt lands: a project chosen from the recents, a folder chosen
- * from the picker — any folder will do, `resolveTarget` makes it a Diffusion
- * Studio project — or, until either is chosen, a fresh project under the
- * application folder.
+ * Where the prompt lands: a project chosen from the recents or, until one is
+ * chosen, a fresh project under the application folder.
  */
 type PromptTarget =
   | { kind: "new" }
-  | { kind: "project"; project: ProjectInfo }
-  | { kind: "folder"; dir: string };
+  | { kind: "project"; project: ProjectInfo };
 
 /**
  * Recents get one row, and as many cards as fit it at about this width — so a
@@ -88,8 +79,8 @@ type PromptTarget =
  */
 const RECENT_CARD_WIDTH_PX = 180;
 const RECENT_MIN_COLUMNS = 2;
-/** The grid's `gap-x-0.5`. */
-const RECENT_GAP_PX = 2;
+/** The grid's `gap-x-1.5`. */
+const RECENT_GAP_PX = 6;
 
 /** Recent projects the target menu offers before it gets unwieldy. */
 const MENU_PROJECTS = 8;
@@ -113,9 +104,6 @@ export function DashboardHomeView() {
 
   const [prompt, setPrompt] = createSignal("");
   const [target, setTarget] = createSignal<PromptTarget>({ kind: "new" });
-  const [selectedProject, setSelectedProject] = createSignal<string | null>(
-    null,
-  );
   const [busy, setBusy] = createSignal(false);
   const [attachments, setAttachments] = createSignal<Attachment[]>([]);
 
@@ -139,10 +127,7 @@ export function DashboardHomeView() {
 
   // The projects the app knows — created here, or opened from a folder —
   // refetched whenever that list changes.
-  const [projects, { refetch: refetchProjects }] = createResource(
-    projectsRevision,
-    () => listProjects(),
-  );
+  const [projects, { refetch: refetchProjects }] = createProjectList();
   // The model is shared with the chat panel and remembered across sessions;
   // the picker is fed by the agent host's probes, so what it offers is what
   // is installed and signed in.
@@ -161,43 +146,27 @@ export function DashboardHomeView() {
       (a, b) => parseTimestamp(b.modifiedAt) - parseTimestamp(a.modifiedAt),
     ),
   );
+  /** The recents that fit the row, beside the new-project card. */
+  const visibleRecents = createMemo(() => recentProjects().slice(0, recentColumns() - 1));
 
   const targetLabel = () => {
     const current = target();
     if (current.kind === "project") return current.project.displayName;
-    if (current.kind === "folder") return folderName(current.dir);
-    return "Choose project";
+    return "";
   };
 
   const canSubmit = () => prompt().trim().length > 0 && !busy() && model() !== null;
 
-  const handlePickFolder = async () => {
-    try {
-      const dir = await pickProjectFolder();
-      if (dir) setTarget({ kind: "folder", dir });
-    } catch (e) {
-      toast.error("Failed to choose folder", {
-        description: (e as Error).message,
-      });
-    }
-  };
-
   /**
-   * The folder the agent will work in. A picked folder is opened as a project,
-   * which scaffolds an entry into it when it is not one already — so any
-   * folder on disk can be the answer, not only a project we made. With none
-   * picked, a fresh project under the application folder.
+   * The folder the agent will work in: the chosen recent project or, with none
+   * chosen, a fresh project under the application folder.
    */
   const resolveTarget = async (): Promise<ProjectInfo | null> => {
     const current = target();
     // A project off the list is its record; the folder is looked at now.
     if (current.kind === "project") return openProjectFromList(current.project);
-    if (current.kind === "folder") return openProjectFolder(current.dir);
 
-    // Waits for the roots to come back from the database, and asks for one
-    // when there is none to wait for.
-    if (!(await ensureProjectsRoot())) return null;
-    return createProject(generateProjectName());
+    return createProject();
   };
 
   const handleSubmit = async () => {
@@ -259,16 +228,20 @@ export function DashboardHomeView() {
     void handleSubmit();
   };
 
+  const [pendingDelete, setPendingDelete] = createSignal<ProjectInfo[]>([]);
+
+  const selection = createProjectSelection({
+    projects: visibleRecents,
+    grid: recentGrid,
+    onDelete: setPendingDelete,
+  });
+
   // Anything outside a card clears the selection — the grid's gaps, the space
   // around it, and the composer above it. A click on a card is that card's.
-  const clearSelection = createBackgroundClickHandler(() =>
-    setSelectedProject(null),
-  );
+  const clearSelection = createBackgroundClickHandler(selection.clear);
 
-  const [pendingDelete, setPendingDelete] = createSignal<ProjectInfo | null>(null);
-
-  const handleDeleted = (project: ProjectInfo) => {
-    setSelectedProject((current) => (current === project.dir ? null : current));
+  const handleDeleted = () => {
+    selection.clear();
     refetchProjects();
   };
 
@@ -286,7 +259,7 @@ export function DashboardHomeView() {
     try {
       const project = await createNewProject();
       if (!project) return;
-      setSelectedProject(null);
+      selection.clear();
       refetchProjects();
       openProject(project);
     } catch (e) {
@@ -315,32 +288,17 @@ export function DashboardHomeView() {
                 <DropdownMenuTrigger
                   as="button"
                   type="button"
-                  aria-label="Choose the folder to work in"
-                  class="flex h-7 shrink-0 items-center rounded-md pl-0.5 pr-2 text-xs font-450 text-muted-foreground hover:bg-accent"
+                  aria-label="Choose the project to work in"
+                  class="flex h-7 shrink-0 items-center rounded-md px-0.5 gap-0.5 text-xs font-450 text-muted-foreground hover:bg-accent"
                 >
                   <span class="grid size-6 shrink-0 place-items-center overflow-clip">
                     <Icon name="navigation.folder" />
                   </span>
-                  <span class="max-w-60 truncate">{targetLabel()}</span>
-                  <span class="grid h-7 w-5 shrink-0 place-items-center overflow-clip">
-                    <Icon name="chevron-down" />
-                  </span>
+                  <span class="max-w-60 truncate translate-y-px">{targetLabel()}</span>
                 </DropdownMenuTrigger>
                 <DropdownMenuPortal>
                   <DropdownMenuContent class="w-60">
-                    {/* One action, not a new/open pair: the picker takes any
-                        folder, and a folder that is not a project yet becomes
-                        one when the prompt is sent. */}
-                    <DropdownMenuGroup>
-                      <DropdownMenuItem onSelect={handlePickFolder}>
-                        <Icon name="plus-add" />
-                        <span class="min-w-0 flex-1 truncate">
-                          Create project...
-                        </span>
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
                     <Show when={recentProjects().length > 0}>
-                      <DropdownMenuSeparator />
                       <DropdownMenuGroup>
                         <DropdownMenuGroupLabel>
                           Recent projects
@@ -466,7 +424,7 @@ export function DashboardHomeView() {
             <div
               ref={setRecentGrid}
               data-slot="card-grid"
-              class="grid items-start gap-x-0.5 gap-y-3"
+              class="grid items-start gap-x-1.5 gap-y-3"
               style={{ "grid-template-columns": `repeat(${recentColumns()}, minmax(0, 1fr))` }}
             >
               <DashboardCardButton onClick={handleCreateProject}>
@@ -478,15 +436,16 @@ export function DashboardHomeView() {
                 </DashboardCardPreview>
                 <DashboardCardMeta title="New project" />
               </DashboardCardButton>
-              <For each={recentProjects().slice(0, recentColumns() - 1)}>
+              <For each={visibleRecents()}>
                 {(project) => (
                   <DashboardProjectCard
                     project={project}
-                    active={selectedProject() === project.dir}
-                    onSelect={() => setSelectedProject(project.dir)}
-                    onDeselect={() => setSelectedProject(null)}
+                    active={selection.isSelected(project)}
+                    targets={selection.targets(project)}
+                    onSelect={(event) => selection.click(project, event)}
+                    onContextMenu={() => selection.contextMenu(project)}
                     onOpen={() => openProject(project)}
-                    onDelete={() => setPendingDelete(project)}
+                    onDelete={() => setPendingDelete(selection.targets(project))}
                     onChanged={refetchProjects}
                   />
                 )}
@@ -497,8 +456,8 @@ export function DashboardHomeView() {
       </div>
 
       <DeleteProjectDialog
-        project={pendingDelete()}
-        onClose={() => setPendingDelete(null)}
+        projects={pendingDelete()}
+        onClose={() => setPendingDelete([])}
         onDeleted={handleDeleted}
       />
     </>
@@ -551,14 +510,4 @@ function createFadingPlaceholder(active: () => boolean) {
   onCleanup(() => clearTimeout(timer));
 
   return { line, visible };
-}
-
-/** The last segment of a path, for naming a folder the user picked. */
-function folderName(dir: string): string {
-  return (
-    dir
-      .replace(/[/\\]+$/, "")
-      .split(/[/\\]/)
-      .pop() || dir
-  );
 }

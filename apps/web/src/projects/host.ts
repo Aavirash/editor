@@ -8,41 +8,39 @@ import { createSignal } from 'solid-js';
 import { MAIN_CHANNELS } from '@desktop/main-channels';
 import { mainBridge } from '@/lib/ipc';
 import {
-	addProjectRecords,
 	findProjectRecords,
 	forgetProject as forgetProjectRecord,
+	getProjectRecord,
 	listProjectRecords,
 	moveProjectRecord,
 	rememberProject,
 	updateProjectRecord,
 } from '@/lib/db';
 
-import type { CompileResult, ProjectInfo, SourceEdit, WriteResult } from '@desktop/main-channels';
+import type { CompileResult, MissingProjectChoice, ProjectInfo, SourceEdit, WriteResult } from '@desktop/main-channels';
 import type { ProjectRecord } from '@/lib/db';
 
-export type { CompileResult, ProjectInfo, ProjectRecord, SourceEdit, WriteResult };
+export type { CompileResult, MissingProjectChoice, ProjectInfo, ProjectRecord, SourceEdit, WriteResult };
 
-// There is one projects root, so it is one localStorage value rather than a
-// database row — read synchronously, so it is known from the first render.
-// Unset for anyone who has never picked one, and for everyone upgrading from
-// when the roots lived in the database: they get the default, or pick, the
-// next time a project is created, and the projects the old root held come
-// back with it (see `adoptProjectsRoot`).
+// The folder the save picker starts in: the parent of the last project
+// saved. One localStorage value, read synchronously. Kept under the key the
+// projects root had, so the picker opens where an upgrading user's projects
+// already are.
 
-const ROOT_STORAGE_KEY = 'diffusion-studio:projects-root';
+const SAVE_FOLDER_STORAGE_KEY = 'diffusion-studio:projects-root';
 
-const storedRoot = (): string | null => {
+const storedSaveFolder = (): string | null => {
 	try {
-		return window.localStorage.getItem(ROOT_STORAGE_KEY);
+		return window.localStorage.getItem(SAVE_FOLDER_STORAGE_KEY);
 	} catch {
 		return null;
 	}
 };
 
-const [projectsRoot, setProjectsRoot] = createSignal<string | null>(storedRoot());
+const [saveFolder, setSaveFolder] = createSignal<string | null>(storedSaveFolder());
 
-/** The folder new projects are created in: null until one is picked. */
-export { projectsRoot };
+/** The folder the save picker starts in: null until a project has been saved. */
+export { saveFolder };
 
 // Bumped whenever the list of known projects changes — one created, opened,
 // renamed, copied, or deleted — so a view listing them can refetch on it.
@@ -60,81 +58,33 @@ export const isDesktop = (): boolean => !!window.desktop;
 export const isWindowsDesktop = (): boolean => window.desktop?.platform === "win32";
 export const isMacOSDesktop = (): boolean => window.desktop?.platform === "darwin";
 
-/** Puts `project` on the list (or marks it just opened) and tells the views. */
-async function remember(project: ProjectInfo): Promise<void> {
-	await rememberProject(project);
+/**
+ * Puts `project` on the list (or marks it just opened) and tells the views.
+ * A project new to the list is filed in `collectionId`, when one is given.
+ */
+async function remember(project: ProjectInfo, collectionId?: string): Promise<void> {
+	await rememberProject(project, collectionId);
 	setProjectsRevision((revision) => revision + 1);
 }
 
-/**
- * Makes `root` the projects root, and puts the projects it already holds on
- * the list — the ones that are not on it yet; the rest were opened when they
- * were opened. This is the one time the disk is searched for projects, and
- * what brings a user's projects back after an upgrade that forgot the root,
- * or a reinstall: pick the folder again, and there they are.
- */
-async function adoptProjectsRoot(root: string): Promise<void> {
+/** Makes `folder` where the next save picker starts. */
+function storeSaveFolder(folder: string): void {
 	try {
-		window.localStorage.setItem(ROOT_STORAGE_KEY, root);
+		window.localStorage.setItem(SAVE_FOLDER_STORAGE_KEY, folder);
 	} catch (error) {
-		console.warn('[projects] could not store the projects root', error);
+		console.warn('[projects] could not store the save folder', error);
 	}
-	setProjectsRoot(root);
-
-	let found: ProjectInfo[] = [];
-	try {
-		found = await mainBridge.call(MAIN_CHANNELS.PROJECTS_SCAN, { root });
-	} catch (error) {
-		console.warn(`[projects] could not look for projects in ${root}`, error);
-	}
-	if (found.length && (await addProjectRecords(found))) {
-		setProjectsRevision((revision) => revision + 1);
-	}
-}
-
-/** The projects root: null off the desktop and until one is picked. */
-export async function getProjectsRoot(): Promise<string | null> {
-	return projectsRoot();
-}
-
-/** Opens the native folder picker and adopts the chosen root. */
-export async function pickProjectsRoot(): Promise<string | null> {
-	const root = await mainBridge.call(MAIN_CHANNELS.PROJECTS_PICK_ROOT, undefined);
-	if (!root) return null;
-
-	await adoptProjectsRoot(root);
-	return root;
+	setSaveFolder(folder);
 }
 
 /**
  * Opens the native folder picker for a folder to open as a single project.
- * Unlike `pickProjectsRoot` it changes nothing on its own — hand the path to
- * `openProjectFolder`, which is what makes the folder a project.
+ * It changes nothing on its own — hand the path to `openProjectFolder`, which
+ * is what makes the folder a project.
  */
 export async function pickProjectFolder(): Promise<string | null> {
 	if (!isDesktop()) return null;
 	return mainBridge.call(MAIN_CHANNELS.PROJECTS_PICK_FOLDER, undefined);
-}
-
-/**
- * The root to work against, defaulted to when there is none. Null off the
- * desktop, where there is no folder at all, and when the user is asked where
- * to put projects and declines to say.
- */
-export async function ensureProjectsRoot(): Promise<string | null> {
-	if (!isDesktop()) return null;
-
-	const current = projectsRoot();
-	if (current) return current;
-
-	// Nothing picked yet: the default folder, so a first project costs a click
-	// rather than a trip through the folder picker. The picker is still there
-	// for anyone who wants to say — and for when the default will not do.
-	const root = await mainBridge.call(MAIN_CHANNELS.PROJECTS_DEFAULT_ROOT, undefined);
-	if (!root) return pickProjectsRoot();
-
-	await adoptProjectsRoot(root);
-	return root;
 }
 
 /**
@@ -163,6 +113,45 @@ export async function checkProject(project: ProjectInfo): Promise<ProjectInfo | 
 }
 
 /**
+ * Finds `project` again when its folder is gone from where the record says:
+ * renamed in Finder, or moved to a folder next to it. Its record follows it to
+ * the new folder, and the project there comes back; null when it is nowhere
+ * near where it was.
+ */
+export async function relocateProject(project: ProjectInfo): Promise<ProjectInfo | null> {
+	const moved = await mainBridge.call(MAIN_CHANNELS.PROJECTS_FIND_MOVED, { dir: project.dir, id: project.id });
+	if (!moved) return null;
+	await moveProjectRecord(project.dir, moved.dir);
+	await remember(moved);
+	return moved;
+}
+
+/** Tells the user `project`'s folder can't be found, and asks what to do about it. */
+export function askAboutMissingProject(project: ProjectInfo): Promise<MissingProjectChoice> {
+	return mainBridge.call(MAIN_CHANNELS.PROJECTS_ASK_MISSING, { displayName: project.displayName, dir: project.dir });
+}
+
+/**
+ * Asks the user where `project` went, with the folder picker: the project in
+ * the folder they choose, its record moved there. Null when they cancel; an
+ * error when the folder holds no project, or a different one.
+ */
+export async function locateProject(project: ProjectInfo): Promise<ProjectInfo | null> {
+	const dir = await pickProjectFolder();
+	if (!dir) return null;
+
+	const found = await mainBridge.call(MAIN_CHANNELS.PROJECTS_RESOLVE, { dir });
+	if (!found) throw new Error("That folder doesn't hold a project.");
+	// A record from before ids has nothing to compare with: the user's word goes.
+	if (project.id && found.id !== project.id) {
+		throw new Error(`That folder holds a different project ("${found.displayName}").`);
+	}
+	await moveProjectRecord(project.dir, found.dir);
+	await remember(found);
+	return found;
+}
+
+/**
  * Re-reads the project in `dir` and brings its record up to date — for a
  * project whose folder changed while it was open, and for one that is
  * closing, so the dashboard shows what it was last edited as. Null when the
@@ -182,13 +171,57 @@ export async function forgetProject(dir: string): Promise<void> {
 	setProjectsRevision((revision) => revision + 1);
 }
 
-/** Creates a project folder under the root, named after `displayName`, and puts it on the list. */
-export async function createProject(displayName: string): Promise<ProjectInfo> {
-	const root = projectsRoot();
-	if (!root) throw new Error('No projects folder selected.');
+/**
+ * Creates a project and puts it on the list, filed in `collectionId` when one
+ * is given. It starts as a draft, called "Untitled", in the app's own folder,
+ * so nothing is asked: where it lives and what it is called are settled when
+ * it is saved (see `saveProject`).
+ */
+export async function createProject(collectionId?: string): Promise<ProjectInfo> {
+	if (!isDesktop()) throw new Error('Creating a project requires the desktop app.');
 
-	const project = await mainBridge.call(MAIN_CHANNELS.PROJECTS_CREATE, { root, displayName });
+	const project = await mainBridge.call(MAIN_CHANNELS.PROJECTS_CREATE, undefined);
+	await remember(project, collectionId);
+	return project;
+}
+
+/**
+ * Asks where to save the draft in `dir` — or, for `move`, where to move the
+ * saved project there — starting where the last project was saved, with
+ * `name` filled in: the folder it will become, or null when the user cancels.
+ * Moves nothing yet.
+ */
+export function pickSaveLocation(dir: string, name: string, action: 'save' | 'move' = 'save'): Promise<string | null> {
+	return mainBridge.call(MAIN_CHANNELS.PROJECTS_PICK_SAVE, { dir, name, startIn: saveFolder(), action });
+}
+
+/** The folder `path` is in. */
+const parentOf = (path: string): string => path.replace(/[\\/]+[^\\/]*[\\/]*$/, '') || path;
+
+/**
+ * Moves the draft in `dir` to `target` (from `pickSaveLocation`), names it
+ * after that folder, and answers with the project where it now lives. The
+ * list follows the folder, and the next save picker starts beside it. Nothing
+ * may hold the folder meanwhile — see `ProjectProvider`.
+ */
+export async function saveProject(dir: string, target: string): Promise<ProjectInfo> {
+	const project = await mainBridge.call(MAIN_CHANNELS.PROJECTS_SAVE, { dir, target });
+	await moveProjectRecord(dir, project.dir);
 	await remember(project);
+	storeSaveFolder(parentOf(project.dir));
+	return project;
+}
+
+/**
+ * Moves the saved project in `dir` to `target` (from `pickSaveLocation`) and
+ * answers with the project where it now lives; its name stays. The list
+ * follows the folder, as it does a save — and so does the next save picker.
+ */
+export async function moveProject(dir: string, target: string): Promise<ProjectInfo> {
+	const project = await mainBridge.call(MAIN_CHANNELS.PROJECTS_MOVE, { dir, target });
+	await moveProjectRecord(dir, project.dir);
+	await remember(project);
+	storeSaveFolder(parentOf(project.dir));
 	return project;
 }
 
@@ -204,7 +237,9 @@ export async function resolveProject(ref: string): Promise<ProjectInfo | null> {
 	if (!ref || !isDesktop()) return null;
 
 	for (const record of await findProjectRecords(ref)) {
-		const project = await mainBridge.call(MAIN_CHANNELS.PROJECTS_RESOLVE, { dir: record.dir });
+		// A folder renamed or moved since is looked for next to where it was.
+		const project =
+			(await mainBridge.call(MAIN_CHANNELS.PROJECTS_RESOLVE, { dir: record.dir })) ?? (await relocateProject(record));
 		if (!project || (project.id !== ref && project.name !== ref)) continue;
 		// Just opened, and holding an id the record may not have had yet.
 		await rememberProject(project);
@@ -217,14 +252,15 @@ export async function resolveProject(ref: string): Promise<ProjectInfo | null> {
  * Opens the folder `dir` as a project, making it one first when it is not:
  * the folder is created if missing and, when nothing in it can be an entry,
  * given an `index.tsx` holding an empty stage — and nothing else. Put on the
- * list, so it stays reachable by name or id across relaunches. How
+ * list, so it stays reachable by name or id across relaunches, filed in
+ * `collectionId` when it is new to the list and one is given. How
  * `diffusion open <path>` lands anywhere on disk.
  */
-export async function openProjectFolder(dir: string): Promise<ProjectInfo> {
+export async function openProjectFolder(dir: string, collectionId?: string): Promise<ProjectInfo> {
 	if (!isDesktop()) throw new Error('Opening a project folder requires the desktop app.');
 
 	const project = await mainBridge.call(MAIN_CHANNELS.PROJECTS_INIT, { dir });
-	await remember(project);
+	await remember(project, collectionId);
 	return project;
 }
 
@@ -234,27 +270,25 @@ export async function getProject(dir: string): Promise<ProjectInfo | null> {
 	return mainBridge.call(MAIN_CHANNELS.PROJECTS_GET, { dir });
 }
 
-/**
- * Renames the project: `displayName` in the record, and the folder with it.
- * The folder moves, so the answer says where the project now lives — hold on
- * to it. Its id has not changed, and neither has its URL; the list follows
- * the folder.
- */
+/** Renames the project: `displayName` in the record. The folder keeps its name. */
 export async function renameProject(dir: string, displayName: string): Promise<ProjectInfo> {
 	if (!dir) throw new Error('No project folder.');
 
 	const project = await mainBridge.call(MAIN_CHANNELS.PROJECTS_RENAME, { dir, displayName });
-	await moveProjectRecord(dir, project.dir);
 	await remember(project);
 	return project;
 }
 
-/** Copies the project in `dir` next to itself and returns the copy (a new id), on the list. */
+/**
+ * Copies the project in `dir` next to itself and returns the copy (a new id),
+ * on the list in the collection the original is in.
+ */
 export async function duplicateProject(dir: string): Promise<ProjectInfo> {
 	if (!dir) throw new Error('No project folder.');
 
 	const project = await mainBridge.call(MAIN_CHANNELS.PROJECTS_DUPLICATE, { dir });
-	await remember(project);
+	const original = await getProjectRecord(dir);
+	await remember(project, original?.collectionId);
 	return project;
 }
 

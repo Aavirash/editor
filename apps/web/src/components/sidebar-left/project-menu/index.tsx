@@ -22,7 +22,7 @@ import { isInputTarget } from "@/utils";
 import { useEditorApi } from "@/dapi";
 import { desktopAppPlatformLabel, downloadDesktopApp } from "@/lib/desktop-app";
 import type { ProjectRouteState } from "@/hooks/use-project-route";
-import { FileMenu } from "./file-menu";
+import { FileMenu, useFileCommands } from "./file-menu";
 import { EditMenu } from "./edit-menu";
 import { ViewMenu } from "./view-menu";
 import { ToolMenu } from "./tool-menu";
@@ -33,6 +33,7 @@ export function ProjectMenu() {
   const navigate = useNavigate();
   const location = useLocation<ProjectRouteState>();
   const { isDesktop } = useEditorApi();
+  const fileCommands = useFileCommands();
 
   const handleOpenDashboard = () => {
     (document.activeElement as HTMLElement)?.blur?.();
@@ -45,15 +46,28 @@ export function ProjectMenu() {
   };
 
   /**
-   * Leaving the editor is the app's command rather than the runtime's, so its
-   * key is bound here, with the item that offers it.
+   * Leaving the editor, and the File commands that open or make another
+   * project, are the app's rather than the runtime's, so their keys are bound
+   * here, with the menu that offers them. ⌘S is the project's own (see
+   * `ProjectProvider`).
    */
   const handleShortcut = (event: KeyboardEvent) => {
-    if (!(event.metaKey || event.ctrlKey) || !event.shiftKey) return;
-    if (event.key.toLowerCase() !== "d" || isInputTarget(event)) return;
+    if (!(event.metaKey || event.ctrlKey) || event.altKey || isInputTarget(event)) return;
 
-    event.preventDefault();
-    handleOpenDashboard();
+    const key = event.key.toLowerCase();
+    if (event.shiftKey && key === "d") {
+      event.preventDefault();
+      handleOpenDashboard();
+    } else if (event.shiftKey && key === "s") {
+      event.preventDefault();
+      fileCommands.duplicate();
+    } else if (!event.shiftKey && key === "n") {
+      event.preventDefault();
+      fileCommands.newProject();
+    } else if (!event.shiftKey && key === "o") {
+      event.preventDefault();
+      fileCommands.openProject();
+    }
   };
 
   onMount(() => {

@@ -18,18 +18,23 @@ import {
   onCleanup,
   type JSX,
 } from "solid-js";
+import { createStore, reconcile } from "solid-js/store";
 import { Separator } from "../ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "somoto";
 import { track } from "@/lib/analytics";
-import { forgetProjectBundle, generateProjectName } from "@/lib/db";
+import { forgetProjectBundle } from "@/lib/db";
 import {
+  askAboutMissingProject,
   checkProject,
   createProject,
   deleteProject,
-  ensureProjectsRoot,
   forgetProject,
   isDesktop,
+  listProjects,
+  locateProject,
+  projectsRevision,
+  relocateProject,
   type ProjectInfo,
 } from "@/projects";
 
@@ -443,10 +448,9 @@ export function DashboardInfoActionRow(props: DashboardInfoActionRowProps) {
 
 type DashboardCardButtonProps = {
   active?: boolean;
-  onClick?(): void;
+  /** A click, or Space — which has no mouse event to pass. */
+  onClick?(event?: MouseEvent): void;
   onDoubleClick?(): void;
-  onEscape?(): void;
-  onDelete?(): void;
   children: JSX.Element;
   class?: string;
 };
@@ -468,22 +472,6 @@ export function DashboardCardButton(props: DashboardCardButtonProps) {
 
       event.preventDefault();
       props.onClick();
-      return;
-    }
-
-    if (event.key === "Escape") {
-      if (!props.onEscape) return;
-
-      event.preventDefault();
-      props.onEscape();
-      return;
-    }
-
-    if (event.key === "Backspace" || event.key === "Delete") {
-      if (!props.onDelete) return;
-
-      event.preventDefault();
-      props.onDelete();
     }
   };
 
@@ -492,11 +480,11 @@ export function DashboardCardButton(props: DashboardCardButtonProps) {
       data-slot="card-button"
       role="button"
       tabIndex={0}
-      onClick={props.onClick}
+      onClick={(event) => props.onClick?.(event)}
       onDblClick={props.onDoubleClick}
       onKeyDown={handleKeyDown}
       class={cx(
-        "flex min-w-0 flex-col gap-3 rounded-xl px-2 pt-2 pb-3 text-left outline-none transition-colors hover:bg-accent/50 group",
+        "flex min-w-0 flex-col gap-3 rounded-xl px-1.5 pt-1.5 pb-3 text-left outline-none transition-colors select-none hover:bg-accent/50 group",
         props.active && "bg-primary/15 hover:bg-primary/15 ring-1 ring-inset ring-primary",
         props.class,
       )}
@@ -563,32 +551,51 @@ export function createBackgroundClickHandler(onCLick: () => void): JSX.EventHand
 }
 
 /**
- * Creates a fresh, randomly named project under the projects root and puts
- * it on the list. Null — with the reason already shown — when there is no
- * desktop to create it on, and when the user is asked where to put it and
- * declines to say. The one flow behind every "new project": the card on each
- * view.
+ * The projects the app knows, refetched whenever that list changes. Each
+ * refetch is merged into the last by folder, so a project that is still there
+ * keeps its object and only its changed fields update: the card showing it
+ * stays mounted, and a menu open on it stays open (a move to a collection
+ * checks its new one in place).
  */
-export async function createNewProject(): Promise<ProjectInfo | null> {
+export function createProjectList() {
+  return createResource(projectsRevision, () => listProjects(), {
+    storage: (initial) => {
+      const [store, setStore] = createStore({ value: initial });
+      return [
+        () => store.value,
+        (next) => {
+          const value = typeof next === "function" ? next(store.value) : next;
+          setStore("value", reconcile(value, { key: "dir" }));
+          return store.value;
+        },
+      ];
+    },
+  });
+}
+
+/**
+ * Creates a fresh project — an "Untitled" draft — and puts it on the list,
+ * filed in `collectionId` when one is given. Null, with the reason already
+ * shown, when there is no desktop to create it on. The one flow behind every
+ * "new project": the card on each view.
+ */
+export async function createNewProject(collectionId?: string): Promise<ProjectInfo | null> {
   if (!isDesktop()) {
     toast.error("Projects on disk are only available in the desktop app");
     return null;
   }
-  // Waits for the roots to come back from the database, and asks for one
-  // when there is none to wait for.
-  if (!(await ensureProjectsRoot())) return null;
-
-  const project = await createProject(generateProjectName());
+  const project = await createProject(collectionId);
   track("project_created");
   return project;
 }
 
 /**
  * The project as its folder holds it now, for opening it from the list: what
- * the list shows is its record, and the folder is only looked at here. Null —
- * with the reason shown, and a way to take the project off the list — when
- * the folder is gone or no longer a project. The list is not touched on its
- * own: a folder on a volume that is not mounted comes back with the volume.
+ * the list shows is its record, and the folder is only looked at here. A
+ * folder renamed or moved next to where it was is found by the project's id,
+ * and the list follows it. Otherwise the user is asked: locate it, take it off
+ * the list, or leave it be — a folder on a volume that is not mounted comes
+ * back with the volume. Null unless there is a project to open.
  */
 export async function openProjectFromList(project: ProjectInfo): Promise<ProjectInfo | null> {
   if (!isDesktop()) return project;
@@ -596,18 +603,27 @@ export async function openProjectFromList(project: ProjectInfo): Promise<Project
   const current = await checkProject(project);
   if (current) return current;
 
-  toast.error(`Could not find ${project.displayName}`, {
-    description: `There is no project at ${project.dir}. It may be on a disk that is not connected.`,
-    action: {
-      label: "Remove from list",
-      onClick: () => {
-        forgetProject(project.dir).catch((e) => {
-          toast.error("Failed to remove project", { description: (e as Error).message });
-        });
-      },
-    },
-  });
-  return null;
+  // Renamed or moved in Finder: found next to where it was, and opened there.
+  const moved = await relocateProject(project);
+  if (moved) return moved;
+
+  const choice = await askAboutMissingProject(project);
+  if (choice === "remove") {
+    try {
+      await forgetProject(project.dir);
+    } catch (e) {
+      toast.error("Failed to remove project", { description: (e as Error).message });
+    }
+    return null;
+  }
+  if (choice !== "locate") return null;
+
+  try {
+    return await locateProject(project);
+  } catch (e) {
+    toast.error(`Could not open ${project.displayName}`, { description: (e as Error).message });
+    return null;
+  }
 }
 
 /**
@@ -627,6 +643,7 @@ type DashboardViewSectionProps = {
   children: JSX.Element;
   class?: string;
   onBackgroundClick?(): void;
+  gridRef?(el: HTMLDivElement): void;
 };
 
 export function DashboardViewSection(props: DashboardViewSectionProps) {
@@ -645,8 +662,9 @@ export function DashboardViewSection(props: DashboardViewSectionProps) {
 
       <div class="min-h-0 flex-1 overflow-y-auto px-4" onClick={handleClick}>
         <div
+          ref={props.gridRef}
           data-slot="card-grid"
-          class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] content-start items-start gap-x-0.5 gap-y-3"
+          class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] content-start items-start gap-x-1.5 gap-y-3"
         >
           {props.children}
         </div>
