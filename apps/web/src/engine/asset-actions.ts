@@ -7,7 +7,9 @@
 
 import { toast } from "somoto";
 import { importFiles as importFilesInto, pickFiles, saveAssetAs as saveAs } from "@diffusionstudio/assets";
+import { getActiveEntity } from "@diffusionstudio/runtime";
 import { insertAsset } from "./insert-asset";
+import { insertAssetsInNewScene } from "./new-scene";
 import { forgetAssetMedia } from "./timeline/media";
 import { forgetAssetPeaks } from "./timeline/peaks";
 
@@ -69,26 +71,38 @@ export async function replaceAssetSource(library: AssetLibrary, asset: Asset): P
 
 /** Inserts `asset` at the playhead of the active scene; tells the user when there is nowhere to put it. */
 export function insertAssetAtPlayhead(world: World, asset: Asset): void {
-  insertAssetsAtPlayhead(world, [asset]);
+  insertAssets(world, [asset]);
 }
 
 /** Inserts each of `assets` at the playhead, all starting there. */
 export function insertAssetsAtPlayhead(world: World, assets: ReadonlyArray<Asset>): void {
-  for (const asset of assets) {
-    if (!insertAsset(world, asset)) {
-      toast("Nothing to insert into", { description: "Open a project first." });
-      return;
-    }
-  }
+  insertAssets(world, assets);
 }
 
 /** Inserts each of `assets` at the start of the timeline, all starting there. */
 export function insertAssetsAtStart(world: World, assets: ReadonlyArray<Asset>): void {
+  insertAssets(world, assets, 0);
+}
+
+/**
+ * Inserts `assets` into the active scene, all starting at `start` (the
+ * playhead by default). With no scene active they get one of their own, as
+ * when dropped on the empty stage, rather than landing loose at the root.
+ */
+function insertAssets(world: World, assets: ReadonlyArray<Asset>, start?: number): void {
+  if (!assets.length) return;
+
+  if (!getActiveEntity(world)) {
+    if (!insertAssetsInNewScene(world, assets, { start })) {
+      toast("Nothing to insert into", { description: "Open a project first." });
+    }
+    return;
+  }
+
   for (const asset of assets) {
-    if (!insertAsset(world, asset, { start: 0 })) {
+    if (!insertAsset(world, asset, { start })) {
       toast("Nothing to insert into", { description: "Open a project first." });
       return;
     }
   }
 }
-
