@@ -22,6 +22,7 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
+  DropdownMenuGroupLabel,
   DropdownMenuItem,
   DropdownMenuItemDetail,
   DropdownMenuPortal,
@@ -221,6 +222,7 @@ export function Layers() {
                   <DropdownMenuItem onSelect={addLayer}>Add layer</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuGroup>
+                    <DropdownMenuGroupLabel>View</DropdownMenuGroupLabel>
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger>Layer height</DropdownMenuSubTrigger>
                       <DropdownMenuPortal>
