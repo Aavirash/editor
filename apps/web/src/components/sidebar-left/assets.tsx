@@ -44,7 +44,7 @@ import { droppedFiles, importFiles, insertAssetsAtPlayhead, insertAssetsAtStart,
 import { isInputTarget } from "@/utils";
 import { useCommand } from "@/context/commands";
 
-import type { AssetLibrary } from "@diffusionstudio/assets";
+import type { Asset, AssetLibrary } from "@diffusionstudio/assets";
 
 /** The ancestors of a folder path, root excluded, nearest last. */
 /**
@@ -170,6 +170,17 @@ export function Assets() {
     setSelection([]);
     anchor = lead = null;
     base = new Set();
+  };
+
+  /** Selects what an import brought in; a dismissed picker or a refused drop keeps the selection. */
+  const selectImported = (assets: ReadonlyArray<Asset>) => {
+    if (!assets.length) return;
+    const keys = assets.map((asset) => assetKey(asset.id));
+    setSelection(keys);
+    anchor = keys[0];
+    lead = keys.at(-1)!;
+    base = new Set();
+    root?.focus();
   };
 
   // Items that leave the grid (another folder opened, filtered out, moved or
@@ -317,7 +328,7 @@ export function Assets() {
     return run(lib);
   };
 
-  const handleImportAssets = () => withLibrary((lib) => pickAndImport(lib, currentFolder()).then(() => { }));
+  const handleImportAssets = () => withLibrary(async (lib) => selectImported(await pickAndImport(lib, currentFolder())));
 
   const handleDrop = async (event: DragEvent) => {
     event.preventDefault();
@@ -330,7 +341,7 @@ export function Assets() {
     const lib = library();
     if (!lib) return;
     if (handleFolderDrop(lib, event, currentFolder())) return;
-    await importFiles(lib, droppedFiles(event), currentFolder());
+    selectImported(await importFiles(lib, droppedFiles(event), currentFolder()));
   };
 
   const handleDragOver = (event: DragEvent) => {
