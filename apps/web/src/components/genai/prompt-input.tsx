@@ -60,6 +60,8 @@ import { droppedFiles, importFiles, pickFiles } from "@/engine/asset-actions";
 import { useMediaSelection } from "./selection";
 import { ASSET_DRAG_TYPE } from "@/components/sidebar-left/folder-item";
 import { useBarKey } from "@/components/canvas/action-bar";
+import { isTopSlot } from "@/components/canvas/toolbar-slot";
+import { useLayout } from "@/context/layout";
 import { usePromptInput } from "@/context/prompt-input";
 
 import type { ModelId, Resolution } from "@diffusionstudio/api-contract";
@@ -83,6 +85,7 @@ export function PromptInput(props: PromptInputProps) {
   const { images: selectedImages } = useMediaSelection();
   const { generate } = useGenerate();
   const { setPromptInputOpen } = usePromptInput();
+  const { toolbarSlot } = useLayout();
 
   // Esc puts the box down, what was typed kept for next time: from the
   // prompt, once the recent prompts are dismissed, and from anywhere else
@@ -400,7 +403,10 @@ export function PromptInput(props: PromptInputProps) {
 
   return (
     <div
-      class="absolute w-xl max-w-[calc(100%-2rem)] bottom-16 z-10 mx-auto left-1/2 -translate-x-1/2 flex flex-col gap-2 rounded-xl border border-border bg-background p-2"
+      class={cx(
+        "absolute w-xl max-w-[calc(100%-2rem)] z-10 mx-auto left-1/2 -translate-x-1/2 flex flex-col gap-2 rounded-xl border border-border bg-background p-2",
+        isTopSlot(toolbarSlot()) ? "bottom-4" : "bottom-16",
+      )}
       onDragOver={handleDragOver}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}

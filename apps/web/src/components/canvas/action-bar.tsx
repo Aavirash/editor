@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// The bar over the canvas, above the toolbar, that a tool or a command puts
+// The bar over the canvas, beside the toolbar, that a tool or a command puts
 // up while it works: what it applies to, and the way out. The pieces here are
 // what bars share; what goes between them is each bar's own.
 
@@ -15,15 +15,20 @@ import { Icon } from "@/components/ui/icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getClipFallbackName } from "@/engine/timeline/style";
 import { cx } from "@/lib/cva";
+import { useLayout } from "@/context/layout";
+import { BAR_SLOT_CLASS } from "./toolbar-slot";
 
 import type { Entity } from "koota";
 import type { JSX } from "solid-js";
 
 export function ActionBar(props: { class?: string; children: JSX.Element }) {
+  const { toolbarSlot } = useLayout();
+
   return (
     <div
       class={cx(
-        "absolute bottom-16 left-1/2 -translate-x-1/2 z-10 rounded-xl px-1.5 py-1 bg-background border border-border flex gap-1 items-center",
+        "absolute z-10 rounded-xl px-1.5 py-1 bg-background border border-border flex gap-1 items-center",
+        BAR_SLOT_CLASS[toolbarSlot()],
         props.class,
       )}
     >

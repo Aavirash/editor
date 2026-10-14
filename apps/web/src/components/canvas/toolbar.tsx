@@ -18,12 +18,17 @@ import { PromptInput } from "../genai/prompt-input";
 import { CommandBar } from "../commands";
 import { ObjectMaskBar } from "./object-mask-bar";
 import { ClipPathBar } from "./clip-path-bar";
-import { For, Match, Show, Switch, createEffect, createMemo, createSignal, on } from "solid-js";
+import { For, Match, Show, Switch, createEffect, createMemo, createSignal, on, onCleanup } from "solid-js";
 import { Tool, ToolType } from "@diffusionstudio/runtime";
 import { useWorld } from "@diffusionstudio/koota-solid";
 import { cancelClipPath, cancelObjectMask, clearClipPathTarget, useTool } from "@/engine";
 import { usePromptInput } from "@/context/prompt-input";
 import { useCommands } from "@/context/commands";
+import { TOOLBAR_SLOTS, useLayout } from "@/context/layout";
+import { TOOLBAR_SLOT_CLASS, isTopSlot } from "./toolbar-slot";
+import { cx } from "@/lib/cva";
+
+import type { ToolbarSlot } from "@/context/layout";
 
 const CURSOR_TOOLS = [
   { tool: ToolType.MOVE, label: 'Move', shortcut: 'V', icon: 'move', menuIcon: 'move-small' },
@@ -43,10 +48,14 @@ type ShapeTool = (typeof SHAPE_TOOLS)[number];
 // Outlives the toolbar, which unmounts with the canvas.
 const [lastShapeTool, setLastShapeTool] = createSignal<ShapeTool>(SHAPE_TOOLS[0]);
 
+/** How far the pointer goes, pressed on the toolbar, before the press is a drag rather than a click. */
+const DRAG_THRESHOLD = 4;
+
 export function Toolbar() {
   const world = useWorld();
   const { promptInputOpen, promptInputConfig, setPromptInputOpen } = usePromptInput();
   const commands = useCommands();
+  const { toolbarSlot, setToolbarSlot } = useLayout();
   const selectedTool = useTool();
   const cursorTool = createMemo(() => CURSOR_TOOLS.find((cursor) => cursor.tool === selectedTool()));
   const shapeTool = createMemo(() => SHAPE_TOOLS.find((shape) => shape.tool === selectedTool()));
@@ -82,6 +91,66 @@ export function Toolbar() {
     world.set(Tool, { value: tool });
   }
 
+  // Dragging the toolbar shows the slots it can go to and puts it in the one
+  // nearest the pointer as it goes; where it is let go of, it stays.
+  let toolbar!: HTMLDivElement;
+  const slots: Partial<Record<ToolbarSlot, HTMLDivElement>> = {};
+  const [dragging, setDragging] = createSignal(false);
+  let press: { x: number; y: number; pointerId: number } | undefined;
+
+  const nearestSlot = (x: number, y: number) => {
+    let nearest = toolbarSlot();
+    let nearestDistance = Infinity;
+    for (const slot of TOOLBAR_SLOTS) {
+      const rect = slots[slot]?.getBoundingClientRect();
+      if (!rect) continue;
+      const distance = Math.hypot(x - (rect.left + rect.width / 2), y - (rect.top + rect.height / 2));
+      if (distance < nearestDistance) {
+        nearest = slot;
+        nearestDistance = distance;
+      }
+    }
+    return nearest;
+  };
+
+  const handlePointerMove = (event: PointerEvent) => {
+    if (event.pointerId !== press?.pointerId) return;
+    if (!dragging()) {
+      if (Math.hypot(event.clientX - press.x, event.clientY - press.y) < DRAG_THRESHOLD) return;
+      // Captured, the press no longer ends in a click on the button it began on.
+      toolbar.setPointerCapture(event.pointerId);
+      setDragging(true);
+    }
+    setToolbarSlot(nearestSlot(event.clientX, event.clientY));
+  };
+
+  const handlePointerUp = (event: PointerEvent) => {
+    if (event.pointerId !== press?.pointerId) return;
+    press = undefined;
+    setDragging(false);
+    window.removeEventListener("pointermove", handlePointerMove);
+    window.removeEventListener("pointerup", handlePointerUp);
+    window.removeEventListener("pointercancel", handlePointerUp);
+  };
+
+  const handlePointerDown = (event: PointerEvent) => {
+    // Menus open on the press: one begun on their trigger is theirs.
+    if (event.button !== 0 || (event.target as Element).closest("[aria-haspopup]")) return;
+    press = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+  };
+
+  onCleanup(() => {
+    window.removeEventListener("pointermove", handlePointerMove);
+    window.removeEventListener("pointerup", handlePointerUp);
+    window.removeEventListener("pointercancel", handlePointerUp);
+  });
+
+  // Up top, the menus open downwards, into the canvas.
+  const menuPlacement = () => (isTopSlot(toolbarSlot()) ? "bottom-start" : "top-start");
+
   return (
     <>
       <Show when={promptInputOpen()}>
@@ -97,7 +166,27 @@ export function Toolbar() {
           </Match>
         </Switch>
       </Show>
-      <div class="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-xl p-1.5 bg-background border border-border-strong flex gap-2 items-center z-10">
+      <Show when={dragging()}>
+        <For each={TOOLBAR_SLOTS}>
+          {(slot) => (
+            <div
+              ref={(el) => (slots[slot] = el)}
+              class={cx("absolute z-10 size-10.5 rounded-xl bg-foreground/10 pointer-events-none", TOOLBAR_SLOT_CLASS[slot])}
+            />
+          )}
+        </For>
+      </Show>
+      {/* Up top, it sits over the desktop window's drag strip, which would take its clicks. */}
+      <div
+        ref={toolbar}
+        class={cx(
+          "absolute rounded-xl p-1.5 bg-background border border-border-strong flex gap-2 items-center z-30",
+          TOOLBAR_SLOT_CLASS[toolbarSlot()],
+          dragging() && "cursor-grabbing",
+        )}
+        style="-webkit-app-region: no-drag;"
+        onPointerDown={handlePointerDown}
+      >
         <div class="flex gap-1">
           <Tooltip>
             <TooltipTrigger
@@ -113,7 +202,7 @@ export function Toolbar() {
               {(cursorTool() ?? CURSOR_TOOLS[0]!).label}
             </TooltipContent>
           </Tooltip>
-          <DropdownMenu placement="top-start">
+          <DropdownMenu placement={menuPlacement()}>
             <Tooltip>
               <TooltipTrigger<typeof DropdownMenuTrigger>
                 as={(triggerProps: object) => (
@@ -173,7 +262,7 @@ export function Toolbar() {
             </TooltipTrigger>
             <TooltipContent shortcut={lastShapeTool().shortcut}>{lastShapeTool().label}</TooltipContent>
           </Tooltip>
-          <DropdownMenu placement="top-start">
+          <DropdownMenu placement={menuPlacement()}>
             <Tooltip>
               <TooltipTrigger<typeof DropdownMenuTrigger>
                 as={(triggerProps: object) => (
