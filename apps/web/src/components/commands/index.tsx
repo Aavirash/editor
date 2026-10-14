@@ -11,6 +11,7 @@ import { GenerateCommand } from "./generate";
 import { MakeVideoCommand } from "./make-video";
 import { ProjectFolderCommands } from "./project-folder";
 import { RemoveBackgroundCommand } from "./remove-background";
+import { RemoveSilenceCommand } from "./remove-silence";
 import { RerunCommand } from "./rerun";
 import { ReuseSettingsCommand } from "./reuse-settings";
 import { ShortcutCommands } from "./shortcuts";
@@ -40,6 +41,7 @@ export function CanvasCommands() {
       <UpscaleCommand />
       <RemoveBackgroundCommand />
       <AutoCaptionsCommand />
+      <RemoveSilenceCommand />
       <ExportVideoCommand />
       <ExportCurrentFrameCommand />
       <ToolCommand tool={ToolType.MOVE} />

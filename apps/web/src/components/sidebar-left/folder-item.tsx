@@ -155,7 +155,7 @@ export function FolderItem(props: FolderItemProps) {
             <MiddleEllipsis
               text={name()}
               data-selected={props.selected}
-              class="text-xs text-center text-muted-foreground select-none data-[selected=true]:text-foreground"
+              class="text-xs text-muted-foreground select-none data-[selected=true]:text-foreground"
             />
           }
         >
@@ -170,7 +170,7 @@ export function FolderItem(props: FolderItemProps) {
             onClick={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
-            class="text-xs text-center text-foreground truncate bg-transparent rounded-sm outline-none ring-1 ring-primary px-0.5"
+            class="text-xs text-foreground truncate bg-transparent rounded-sm outline-none ring-1 ring-primary px-0.5"
           />
         </Show>
       </ContextMenuTrigger>
