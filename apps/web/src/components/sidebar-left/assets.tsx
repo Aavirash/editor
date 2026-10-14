@@ -575,7 +575,7 @@ export function Assets() {
                 <TooltipContent>Filter assets</TooltipContent>
               </Tooltip>
               <DropdownMenuPortal>
-                <DropdownMenuContent class="w-32">
+                <DropdownMenuContent class="w-36">
                   <For each={ASSET_FILTER_OPTIONS}>
                     {(option) => (
                       <DropdownMenuItem
@@ -801,7 +801,7 @@ export function Assets() {
   );
 }
 
-type AssetFilter = "ALL" | "VIDEO" | "IMAGE" | "AUDIO";
+type AssetFilter = "ALL" | "VIDEO" | "IMAGE" | "AUDIO" | "TRANSCRIPT";
 
 const ASSET_FILTER_OPTIONS: ReadonlyArray<{
   value: AssetFilter;
@@ -812,6 +812,7 @@ const ASSET_FILTER_OPTIONS: ReadonlyArray<{
     { value: "VIDEO", label: "Video", icon: "video" },
     { value: "IMAGE", label: "Image", icon: "media-image" },
     { value: "AUDIO", label: "Audio", icon: "media-audio" },
+    { value: "TRANSCRIPT", label: "Captions", icon: "captions-small" },
   ];
 
 type FilterIconStackProps = {
