@@ -59,6 +59,8 @@ import { useEditor } from "@/engine/hooks";
 import { droppedFiles, importFiles, pickFiles } from "@/engine/asset-actions";
 import { useMediaSelection } from "./selection";
 import { ASSET_DRAG_TYPE } from "@/components/sidebar-left/folder-item";
+import { useBarKey } from "@/components/canvas/action-bar";
+import { usePromptInput } from "@/context/prompt-input";
 
 import type { ModelId, Resolution } from "@diffusionstudio/api-contract";
 import type { AssetCache } from "@diffusionstudio/assets";
@@ -80,6 +82,13 @@ export function PromptInput(props: PromptInputProps) {
   const editor = useEditor();
   const { images: selectedImages } = useMediaSelection();
   const { generate } = useGenerate();
+  const { setPromptInputOpen } = usePromptInput();
+
+  // Esc puts the box down, what was typed kept for next time: from the
+  // prompt, once the recent prompts are dismissed, and from anywhere else
+  // but an open menu or another field.
+  const close = () => setPromptInputOpen(false);
+  useBarKey((event) => event.key === "Escape", close);
 
   let textareaRef!: HTMLTextAreaElement;
   let dragCounter = 0;
@@ -306,6 +315,9 @@ export function PromptInput(props: PromptInputProps) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      close();
     }
   };
 
