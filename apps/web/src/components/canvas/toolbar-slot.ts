@@ -26,4 +26,14 @@ export const BAR_SLOT_CLASS: Record<ToolbarSlot, string> = {
   "bottom-right": "bottom-16 right-4",
 };
 
+/** Where each slot is on the canvas, as fractions of its width and height: the slot nearest the pointer is the one a drag would drop the toolbar in. */
+export const TOOLBAR_SLOT_ANCHOR: Record<ToolbarSlot, { x: number; y: number }> = {
+  "bottom": { x: 0.5, y: 1 },
+  "top": { x: 0.5, y: 0 },
+  "top-left": { x: 0, y: 0 },
+  "top-right": { x: 1, y: 0 },
+  "bottom-left": { x: 0, y: 1 },
+  "bottom-right": { x: 1, y: 1 },
+};
+
 export const isTopSlot = (slot: ToolbarSlot) => slot.startsWith("top");

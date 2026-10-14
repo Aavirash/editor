@@ -25,7 +25,7 @@ import { cancelClipPath, cancelObjectMask, clearClipPathTarget, useTool } from "
 import { usePromptInput } from "@/context/prompt-input";
 import { useCommands } from "@/context/commands";
 import { TOOLBAR_SLOTS, useLayout } from "@/context/layout";
-import { TOOLBAR_SLOT_CLASS, isTopSlot } from "./toolbar-slot";
+import { TOOLBAR_SLOT_ANCHOR, TOOLBAR_SLOT_CLASS, isTopSlot } from "./toolbar-slot";
 import { cx } from "@/lib/cva";
 
 import type { ToolbarSlot } from "@/context/layout";
@@ -91,20 +91,24 @@ export function Toolbar() {
     world.set(Tool, { value: tool });
   }
 
-  // Dragging the toolbar shows the slots it can go to and puts it in the one
-  // nearest the pointer as it goes; where it is let go of, it stays.
+  // Dragging the toolbar shows the other slots it can go to, the one nearest
+  // the pointer drawn wide; the toolbar stays put until it is let go of, and
+  // then moves there.
   let toolbar!: HTMLDivElement;
-  const slots: Partial<Record<ToolbarSlot, HTMLDivElement>> = {};
-  const [dragging, setDragging] = createSignal(false);
+  const [dropSlot, setDropSlot] = createSignal<ToolbarSlot>();
+  const dragging = () => dropSlot() !== undefined;
   let press: { x: number; y: number; pointerId: number } | undefined;
 
   const nearestSlot = (x: number, y: number) => {
+    const canvas = toolbar.offsetParent!.getBoundingClientRect();
     let nearest = toolbarSlot();
     let nearestDistance = Infinity;
     for (const slot of TOOLBAR_SLOTS) {
-      const rect = slots[slot]?.getBoundingClientRect();
-      if (!rect) continue;
-      const distance = Math.hypot(x - (rect.left + rect.width / 2), y - (rect.top + rect.height / 2));
+      const anchor = TOOLBAR_SLOT_ANCHOR[slot];
+      const distance = Math.hypot(
+        x - (canvas.left + anchor.x * canvas.width),
+        y - (canvas.top + anchor.y * canvas.height),
+      );
       if (distance < nearestDistance) {
         nearest = slot;
         nearestDistance = distance;
@@ -119,15 +123,16 @@ export function Toolbar() {
       if (Math.hypot(event.clientX - press.x, event.clientY - press.y) < DRAG_THRESHOLD) return;
       // Captured, the press no longer ends in a click on the button it began on.
       toolbar.setPointerCapture(event.pointerId);
-      setDragging(true);
     }
-    setToolbarSlot(nearestSlot(event.clientX, event.clientY));
+    setDropSlot(nearestSlot(event.clientX, event.clientY));
   };
 
   const handlePointerUp = (event: PointerEvent) => {
     if (event.pointerId !== press?.pointerId) return;
     press = undefined;
-    setDragging(false);
+    const slot = dropSlot();
+    if (slot) setToolbarSlot(slot);
+    setDropSlot(undefined);
     window.removeEventListener("pointermove", handlePointerMove);
     window.removeEventListener("pointerup", handlePointerUp);
     window.removeEventListener("pointercancel", handlePointerUp);
@@ -167,11 +172,15 @@ export function Toolbar() {
         </Switch>
       </Show>
       <Show when={dragging()}>
-        <For each={TOOLBAR_SLOTS}>
+        <For each={TOOLBAR_SLOTS.filter((slot) => slot !== toolbarSlot())}>
           {(slot) => (
+            // As tall as the toolbar: its buttons, padding and border.
             <div
-              ref={(el) => (slots[slot] = el)}
-              class={cx("absolute z-10 size-10.5 rounded-xl bg-foreground/10 pointer-events-none", TOOLBAR_SLOT_CLASS[slot])}
+              class={cx(
+                "absolute z-10 h-10.5 rounded-xl bg-foreground/6 pointer-events-none transition-all duration-150",
+                TOOLBAR_SLOT_CLASS[slot],
+                slot === dropSlot() ? "w-55" : "w-10.5",
+              )}
             />
           )}
         </For>
