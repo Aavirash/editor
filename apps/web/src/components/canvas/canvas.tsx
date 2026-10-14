@@ -8,6 +8,7 @@ import { CameraController, EngineCanvas } from "@/engine";
 import { insertAsset } from "@/engine/insert-asset";
 import { droppedFiles, importFiles } from "@/engine/asset-actions";
 import { Toolbar } from "./toolbar";
+import { CanvasCommands } from "@/components/commands";
 import { DesktopAppBanner } from "./desktop-app-banner";
 import { toast } from "somoto"
 import { SceneInitOverlay } from "./scene-init-overlay";
@@ -75,6 +76,7 @@ export function Canvas() {
         on:dragover={handleDragOver}
       >
         <Toolbar />
+        <CanvasCommands />
         <DesktopAppBanner />
         <SceneInitOverlay />
         <EngineCanvas />

@@ -15,14 +15,15 @@ import {
   DropdownMenuShortcut,
 } from "@/components/ui/dropdown-menu";
 import { PromptInput } from "../genai/prompt-input";
-import { ActionBar } from "../genai/action-bar";
+import { CommandBar } from "../commands";
 import { ObjectMaskBar } from "./object-mask-bar";
 import { ClipPathBar } from "./clip-path-bar";
-import { For, Match, Show, Switch, createEffect, createMemo, createSignal } from "solid-js";
+import { For, Match, Show, Switch, createEffect, createMemo, createSignal, on } from "solid-js";
 import { Tool, ToolType } from "@diffusionstudio/runtime";
 import { useWorld } from "@diffusionstudio/koota-solid";
-import { clearClipPathTarget, useTool } from "@/engine";
+import { cancelClipPath, cancelObjectMask, clearClipPathTarget, useTool } from "@/engine";
 import { usePromptInput } from "@/context/prompt-input";
+import { useCommands } from "@/context/commands";
 
 const CURSOR_TOOLS = [
   { tool: ToolType.MOVE, label: 'Move', shortcut: 'V', icon: 'move', menuIcon: 'move-small' },
@@ -44,7 +45,8 @@ const [lastShapeTool, setLastShapeTool] = createSignal<ShapeTool>(SHAPE_TOOLS[0]
 
 export function Toolbar() {
   const world = useWorld();
-  const { promptInputOpen, promptInputConfig, openPromptInput, setPromptInputOpen } = usePromptInput();
+  const { promptInputOpen, promptInputConfig, setPromptInputOpen } = usePromptInput();
+  const commands = useCommands();
   const selectedTool = useTool();
   const cursorTool = createMemo(() => CURSOR_TOOLS.find((cursor) => cursor.tool === selectedTool()));
   const shapeTool = createMemo(() => SHAPE_TOOLS.find((shape) => shape.tool === selectedTool()));
@@ -62,6 +64,20 @@ export function Toolbar() {
     }
   });
 
+  // One bar over the canvas at a time, whichever came up last: a command's
+  // bar puts down the prompt box and the tools that have bars of their own,
+  // and either of those coming up takes the command's bar down.
+  createEffect(on(commands.active, (command) => {
+    if (!command) return;
+    setPromptInputOpen(false);
+    if (selectedTool() === ToolType.OBJECT_MASK) cancelObjectMask(world);
+    if (selectedTool() === ToolType.CLIP_PATH) cancelClipPath(world);
+  }));
+
+  createEffect(on([promptInputOpen, selectedTool], ([open, tool]) => {
+    if (open || tool === ToolType.OBJECT_MASK || tool === ToolType.CLIP_PATH) commands.close();
+  }));
+
   const handleToolChange = (tool: ToolType) => {
     world.set(Tool, { value: tool });
   }
@@ -72,7 +88,7 @@ export function Toolbar() {
         <PromptInput initialConfig={promptInputConfig()} />
       </Show>
       <Show when={!promptInputOpen()}>
-        <Switch fallback={<ActionBar openPromptInput={openPromptInput} />}>
+        <Switch fallback={<CommandBar />}>
           <Match when={selectedTool() === ToolType.OBJECT_MASK}>
             <ObjectMaskBar />
           </Match>
@@ -215,10 +231,6 @@ export function Toolbar() {
           </TooltipTrigger>
           <TooltipContent shortcut="T">Text</TooltipContent>
         </Tooltip>
-        <Separator
-          orientation="vertical"
-          class="data-[orientation=vertical]:h-5 rounded-md"
-        />
         <Tooltip>
           <TooltipTrigger
             as={Button}
@@ -230,6 +242,19 @@ export function Toolbar() {
             <Icon name="ai-generate" class="size-7" />
           </TooltipTrigger>
           <TooltipContent>AI generate</TooltipContent>
+        </Tooltip>
+        <Separator orientation="vertical" class="min-h-5" />
+        <Tooltip>
+          <TooltipTrigger
+            as={Button}
+            size="icon-square"
+            variant="ghost"
+            class="text-muted-foreground"
+            onClick={() => commands.setPaletteOpen(true)}
+          >
+            <Icon name="tool.actions-spotlight" />
+          </TooltipTrigger>
+          <TooltipContent shortcut="⌘K">Actions</TooltipContent>
         </Tooltip>
       </div>
     </>

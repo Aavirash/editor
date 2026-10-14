@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDerived } from "@/engine/hooks";
+import { ActionBar } from "./action-bar";
 import { applyClipPaths, cancelClipPath, getClipPathPicks, getClipPathTarget } from "@/engine/clip-path";
 
 import type { Entity } from "koota";
@@ -33,7 +34,7 @@ export function ClipPathBar() {
   return (
     <Show when={target()}>
       {(node) => (
-        <div class="absolute bottom-16 left-1/2 -translate-x-1/2 z-10 rounded-xl px-1.5 py-1 bg-background border border-border flex gap-1 items-center">
+        <ActionBar>
           <span class="px-2 text-xs text-muted-foreground whitespace-nowrap">
             {picks().length === 0
               ? "Pick a shape to use as the clipping source"
@@ -52,7 +53,7 @@ export function ClipPathBar() {
             </TooltipTrigger>
             <TooltipContent shortcut="⌘↵">Clip <TargetName target={node()} /></TooltipContent>
           </Tooltip>
-        </div>
+        </ActionBar>
       )}
     </Show>
   );

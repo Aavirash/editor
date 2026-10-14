@@ -70,5 +70,5 @@ export function useTransforms() {
     return prices.reduce<number>((sum, credits) => sum + credits!, 0);
   };
 
-  return { run, price };
+  return { targets, run, price };
 }
