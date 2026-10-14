@@ -10,7 +10,7 @@ import { AppContextMenu } from "@/components/app-context-menu";
 
 import { AuthProvider, useAuth } from '@/context/auth';
 import { CommandsProvider } from '@/context/commands';
-import { CommandPalette } from '@/components/commands';
+import { CommandPalette, ReloadWindowCommand } from '@/components/commands';
 import { PersistRoute } from '@/lib/persist-route';
 import { useColorMode } from "@kobalte/core";
 import { mainBridge } from "@/lib/ipc";
@@ -102,6 +102,7 @@ function App() {
               <CommandsProvider>
                 {props.children}
                 <CommandPalette />
+                <ReloadWindowCommand />
                 <BootSplash />
                 <UpgradeDialog />
                 <PurchaseSuccess />

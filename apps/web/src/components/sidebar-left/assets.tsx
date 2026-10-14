@@ -34,6 +34,7 @@ import { useLibrary } from "@/engine/library";
 import { useAssetSelection } from "@/engine/hooks";
 import { droppedFiles, importFiles, insertAssetsAtPlayhead, pickAndImport } from "@/engine/asset-actions";
 import { isInputTarget } from "@/utils";
+import { useCommand } from "@/context/commands";
 
 import type { AssetLibrary } from "@diffusionstudio/assets";
 
@@ -492,6 +493,27 @@ export function Assets() {
   onMount(() => {
     window.addEventListener("keydown", handleShortcut);
     onCleanup(() => window.removeEventListener("keydown", handleShortcut));
+  });
+
+  // The same two in the palette, into the folder the panel is showing.
+  useCommand({
+    id: "import-assets",
+    title: "Import media",
+    group: "Assets",
+    icon: "download",
+    keywords: ["assets", "files", "upload", "add"],
+    shortcut: ["⌘", "I"],
+    run: () => void handleImportAssets(),
+  });
+
+  useCommand({
+    id: "new-folder",
+    title: "Create folder",
+    group: "Assets",
+    icon: "navigation.folder",
+    keywords: ["new folder", "directory", "organize"],
+    shortcut: ["⇧", "⌘", "N"],
+    run: handleCreateFolder,
   });
 
   return (

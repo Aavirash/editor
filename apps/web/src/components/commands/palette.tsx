@@ -7,11 +7,18 @@ import { Dialog } from "@kobalte/core/dialog";
 import { Command as CommandPrimitive, defaultFilter } from "cmdk-solid";
 import { Icon } from "@/components/ui/icon";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
-import { useCommands } from "@/context/commands";
+import { SECTIONS, useCommands } from "@/context/commands";
 
 import type { RegisteredCommand } from "@/context/commands";
 
 const offered = (command: RegisteredCommand) => command.available?.() ?? true;
+
+/**
+ * The least score a match needs to be listed. cmdk matches letters anywhere
+ * in order, so "group" finds g…r…o…u…p across a command's keywords; such a
+ * match scores well under this, a word or prefix or initials well over.
+ */
+const MIN_SCORE = 0.05;
 
 /**
  * The command palette, on ⌘K: the commands on offer, by section, found by
@@ -62,14 +69,15 @@ export function CommandPalette() {
   );
 }
 
-type Section = { name: string; commands: RegisteredCommand[] };
+type ListedSection = { name: string; commands: RegisteredCommand[] };
 
 /**
  * The commands on offer that match `search`, in sections. Without a search,
- * in the order they were registered; with one, the best match first, and the
- * section it is in. cmdk scores, but leaves the order alone under Solid.
+ * sections in `SECTIONS` order and commands in the order they registered;
+ * with one, the best match first, and the section it is in. cmdk scores,
+ * but leaves the order alone under Solid.
  */
-function rank(commands: RegisteredCommand[], search: string): Section[] {
+function rank(commands: RegisteredCommand[], search: string): ListedSection[] {
   const query = search.trim();
   const matches = commands
     .filter(offered)
@@ -77,8 +85,8 @@ function rank(commands: RegisteredCommand[], search: string): Section[] {
       command,
       score: query ? defaultFilter(command.title, query, [command.group, ...(command.keywords ?? [])]) : 1,
     }))
-    .filter((match) => match.score > 0)
-    .sort((a, b) => b.score - a.score);
+    .filter((match) => match.score >= MIN_SCORE)
+    .sort((a, b) => b.score - a.score || SECTIONS.indexOf(a.command.group) - SECTIONS.indexOf(b.command.group));
 
   const byName = new Map<string, RegisteredCommand[]>();
   for (const { command } of matches) {

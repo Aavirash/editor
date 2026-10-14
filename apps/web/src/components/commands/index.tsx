@@ -10,16 +10,17 @@ import { MakeVideoCommand } from "./make-video";
 import { RemoveBackgroundCommand } from "./remove-background";
 import { RerunCommand } from "./rerun";
 import { ReuseSettingsCommand } from "./reuse-settings";
+import { ShortcutCommands } from "./shortcuts";
 import { ToolCommand } from "./tool";
 import { UpscaleCommand } from "./upscale";
 
 export { CommandBar } from "./command-bar";
 export { CommandPalette } from "./palette";
+export { ReloadWindowCommand } from "./reload-window";
 
 /**
  * The canvas's commands: what to generate, what the selected media can be
- * run through, and the toolbar's tools. Sections are listed in the order
- * they are first mounted here.
+ * run through, the toolbar's tools, and the keyboard shortcuts.
  */
 export function CanvasCommands() {
   return (
@@ -44,6 +45,7 @@ export function CanvasCommands() {
       <ToolCommand tool={ToolType.POLYGON} />
       <ToolCommand tool={ToolType.PEN} />
       <ToolCommand tool={ToolType.TEXT} />
+      <ShortcutCommands />
     </>
   );
 }

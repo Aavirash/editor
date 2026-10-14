@@ -11,28 +11,37 @@ import { createContext, createSignal, getOwner, onCleanup, useContext } from "so
 
 import type { Accessor, Component, JSX, Owner } from "solid-js";
 
+/**
+ * The palette's sections, in the order it lists them. Fixed here rather than
+ * taken from the order commands register in, which depends on what mounted
+ * first and changes as parts of the UI come and go.
+ */
+export const SECTIONS = ["Timeline", "Assets", "Media", "Object", "Generate", "Tools", "Edit", "Window"] as const;
+
+export type Section = (typeof SECTIONS)[number];
+
 type CommandAction =
   | {
-      /** What picking it does. */
-      run(): void;
-      bar?: never;
-    }
+    /** What picking it does. */
+    run(): void;
+    bar?: never;
+  }
   | {
-      /**
-       * The action bar picking it puts up, over the canvas until the bar
-       * closes it (see `useCommands().close`) or Esc does. For commands
-       * that need a target picked, or a go-ahead, before they run.
-       */
-      bar: Component;
-      run?: never;
-    };
+    /**
+     * The action bar picking it puts up, over the canvas until the bar
+     * closes it (see `useCommands().close`) or Esc does. For commands
+     * that need a target picked, or a go-ahead, before they run.
+     */
+    bar: Component;
+    run?: never;
+  };
 
 export type Command = CommandAction & {
   /** Unique among the commands registered at once. */
   id: string;
   title: string;
-  /** The palette section it is listed under; sections come in the order they were first registered. */
-  group: string;
+  /** The palette section it is listed under. */
+  group: Section;
   icon?: string;
   /** More words the palette finds it by. */
   keywords?: string[];
