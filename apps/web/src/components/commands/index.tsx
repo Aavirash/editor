@@ -5,6 +5,8 @@
 import { ToolType } from "@diffusionstudio/runtime";
 import { AutoCaptionsCommand } from "./auto-captions";
 import { EditWithPromptCommand } from "./edit-with-prompt";
+import { ExportCurrentFrameCommand } from "./export-current-frame";
+import { ExportVideoCommand } from "./export-video";
 import { GenerateCommand } from "./generate";
 import { MakeVideoCommand } from "./make-video";
 import { RemoveBackgroundCommand } from "./remove-background";
@@ -36,6 +38,8 @@ export function CanvasCommands() {
       <UpscaleCommand />
       <RemoveBackgroundCommand />
       <AutoCaptionsCommand />
+      <ExportVideoCommand />
+      <ExportCurrentFrameCommand />
       <ToolCommand tool={ToolType.MOVE} />
       <ToolCommand tool={ToolType.HAND} />
       <ToolCommand tool={ToolType.OBJECT_MASK} />

@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { For, Show, createResource, createSignal, onMount, splitProps } from "solid-js";
+import { For, Show, createResource, createSignal, onMount } from "solid-js";
 import { Portal } from "solid-js/web";
 import { SAM2_MODELS, downloadSize, sam2Model } from "@diffusionstudio/sam2/models";
 import { useWorld } from "@diffusionstudio/koota-solid";
@@ -16,12 +16,11 @@ import { Popover, PopoverContent, PopoverPortal, PopoverTrigger } from "@/compon
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuPortal,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cx } from "@/lib/cva";
-import { ActionBar } from "./action-bar";
+import { ACTION_BAR_MENU_CLASS, ActionBar, ActionBarMenuHeader, ActionBarMenuItem, keepMenuEscape } from "./action-bar";
 import { useDerived, useObjectMaskTool } from "@/engine/hooks";
 import {
   cancelObjectMask,
@@ -62,9 +61,6 @@ const MODEL_NOTES: Record<Sam2ModelId, string> = {
 
 /** The brush's size on its slider: its diameter, in percent of the frame's height. */
 const BRUSH_SIZE = { min: 1, max: 30 };
-
-/** The menus the bar opens: headed lists, laid out like the toolbar's own. */
-const MENU_CLASS = "rounded-xl border-border bg-background px-2 pt-0 pb-2 gap-0 shadow-[0px_12px_24px_0px_rgba(0,0,0,0.24)]";
 
 type SessionState = {
   status: ObjectTrackStatus | null;
@@ -195,18 +191,18 @@ function ModelMenu(props: { disabled: boolean }) {
         <TooltipContent>{load() ? describeModelLoad(load()!) : "Segmentation model"}</TooltipContent>
       </Tooltip>
       <DropdownMenuPortal>
-        <DropdownMenuContent class={cx(MENU_CLASS, "min-w-40")} onEscapeKeyDown={keepEscape}>
-          <MenuHeader>Model</MenuHeader>
+        <DropdownMenuContent class={cx(ACTION_BAR_MENU_CLASS, "min-w-40")} onEscapeKeyDown={keepMenuEscape}>
+          <ActionBarMenuHeader>Model</ActionBarMenuHeader>
           <div class="flex flex-col gap-1 py-0.5">
             <For each={SAM2_MODELS}>
               {(model) => (
-                <CheckedItem
+                <ActionBarMenuItem
                   checked={model.id === objectMaskModel()}
                   onSelect={() => pickObjectMaskModel(model.id)}
                   onHover={(row) => setHovered(row ? { model, row } : null)}
                 >
                   {model.label}
-                </CheckedItem>
+                </ActionBarMenuItem>
               )}
             </For>
           </div>
@@ -266,11 +262,11 @@ function ModePopover() {
       </Tooltip>
       <PopoverPortal>
         <PopoverContent
-          class={cx(MENU_CLASS, "w-44")}
-          onEscapeKeyDown={keepEscape}
+          class={cx(ACTION_BAR_MENU_CLASS, "w-44")}
+          onEscapeKeyDown={keepMenuEscape}
           onOpenAutoFocus={(event) => event.preventDefault()}
         >
-          <MenuHeader>Tool</MenuHeader>
+          <ActionBarMenuHeader>Tool</ActionBarMenuHeader>
           <SegmentedIconTabs value={tool.mode} onChange={(mode) => tool.set({ mode })} items={MODE_TABS} class="my-0.5" />
           <Show when={mode().value === "brush"}>
             <div class="pt-2 pb-0.5">
@@ -316,14 +312,14 @@ function OpMenu(props: { disabled: boolean }) {
         <TooltipContent shortcut="Hold ⌥ to swap">{op().hint}</TooltipContent>
       </Tooltip>
       <DropdownMenuPortal>
-        <DropdownMenuContent class={cx(MENU_CLASS, "min-w-40")} onEscapeKeyDown={keepEscape}>
-          <MenuHeader>Mode</MenuHeader>
+        <DropdownMenuContent class={cx(ACTION_BAR_MENU_CLASS, "min-w-40")} onEscapeKeyDown={keepMenuEscape}>
+          <ActionBarMenuHeader>Mode</ActionBarMenuHeader>
           <div class="flex flex-col gap-1 py-0.5">
             <For each={OPS}>
               {(entry) => (
-                <CheckedItem checked={entry.value === tool.op()} onSelect={() => tool.set({ op: entry.value })}>
+                <ActionBarMenuItem checked={entry.value === tool.op()} onSelect={() => tool.set({ op: entry.value })}>
                   {entry.label}
-                </CheckedItem>
+                </ActionBarMenuItem>
               )}
             </For>
           </div>
@@ -331,46 +327,6 @@ function OpMenu(props: { disabled: boolean }) {
       </DropdownMenuPortal>
     </DropdownMenu>
   );
-}
-
-function MenuHeader(props: { children: JSX.Element }) {
-  return <div class="flex h-8 items-center px-1 text-xs text-muted-foreground">{props.children}</div>;
-}
-
-type CheckedItemProps = {
-  checked: boolean;
-  onSelect(): void;
-  onHover?(row: HTMLElement | null): void;
-  children: JSX.Element;
-};
-
-/** A menu row that is the current pick: raised, with a check at its end. */
-function CheckedItem(props: CheckedItemProps) {
-  const [local, rest] = splitProps(props, ["checked", "onHover", "children"]);
-
-  return (
-    <DropdownMenuItem
-      {...rest}
-      onPointerEnter={(event: PointerEvent) => local.onHover?.(event.currentTarget as HTMLElement)}
-      onPointerLeave={() => local.onHover?.(null)}
-      onFocus={(event: FocusEvent) => local.onHover?.(event.currentTarget as HTMLElement)}
-      onBlur={() => local.onHover?.(null)}
-      tone="neutral"
-      class={cx("pr-0", local.checked ? "bg-accent text-foreground" : "text-muted-foreground")}
-    >
-      <span class="min-w-0 flex-1 truncate">{local.children}</span>
-      <span class="flex size-7 items-center justify-center">
-        <Show when={local.checked}>
-          <Icon name="confirm-check" class="text-foreground" />
-        </Show>
-      </span>
-    </DropdownMenuItem>
-  );
-}
-
-/** Esc closes an open menu; it goes no further, where it would put the tool down. */
-function keepEscape(event: KeyboardEvent) {
-  event.stopPropagation();
 }
 
 /**

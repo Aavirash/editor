@@ -6,10 +6,11 @@ import { createContext, useContext, onCleanup, onMount } from "solid-js";
 import { toast } from "somoto";
 import { canEncodeVideo } from "mediabunny";
 import { useWorld } from "@diffusionstudio/koota-solid";
-import { computeOutputSize } from "@diffusionstudio/encoder";
-import { Computed, getActiveEntity } from "@diffusionstudio/runtime";
-import { assert, downloadObject, isInputTarget } from "@/utils";
+import { computeOutputSize, createImageEncoder } from "@diffusionstudio/encoder";
+import { Computed, Workarea, getActiveEntity, store } from "@diffusionstudio/runtime";
+import { assert, isInputTarget } from "@/utils";
 import { useEngineContext } from "@/engine";
+import { createCapture } from "@/engine/capture";
 import { useProject } from "@/context/project";
 import { ExportProgress } from "@/components/sidebar-right/inspector/export-progress";
 import { renderScene, renderOverlay, cancelRender, type ExportConfig } from "@/context/render";
@@ -23,7 +24,10 @@ import type { JSX, Accessor } from "solid-js";
 
 type ExportContextValue = {
   exportScene: (scene: Entity, config: ExportConfig) => Promise<void>;
+  /** Writes the frame at the active scene's playhead as a PNG, at the scene's own size. */
   exportCurrentFrame: () => Promise<void>;
+  /** Writes the frame at `scene`'s playhead as a PNG, its shorter side `resolution` px (the scene's own when left out). */
+  exportFrame: (scene: Entity, resolution?: number) => Promise<void>;
   exporting: Accessor<boolean>;
 };
 
@@ -114,15 +118,68 @@ export function ExportProvider(props: { children: JSX.Element }) {
   };
 
   const exportCurrentFrame: ExportContextValue["exportCurrentFrame"] = async () => {
-    const blob = await engine.snapshot();
+    const scene = getActiveEntity(world);
+    if (scene === null) {
+      toast("No active scene to export");
+      return;
+    }
+    await exportFrame(scene);
+  };
 
-    if (!blob) {
-      toast.error("Failed to capture frame");
+  const exportFrame: ExportContextValue["exportFrame"] = async (scene, resolution) => {
+    if (!scene?.isAlive()) return;
+
+    // The frame under the playhead, counted the way the image encoder counts:
+    // from the export's first frame, the work area's start.
+    const computed = scene.get(Computed);
+    const workarea = scene.get(Workarea);
+    const start = workarea?.start ?? 0;
+    const end = workarea?.end ?? computed?.duration ?? 0;
+    const playhead = store(world, Computed).localTime[scene.id()] ?? 0;
+    const frame = Math.max(0, Math.min(playhead, end - 1) - start);
+
+    // The encoder sizes by height; a resolution names the shorter side.
+    const { height } = computeOutputSize(computed?.width || 1920, computed?.height || 1080, resolution);
+
+    const name = project.name().replace(/\s+/g, "-").toLowerCase();
+
+    let target: FileSystemFileHandle;
+    try {
+      target = await window.showSaveFilePicker({
+        suggestedName: `${name}.png`,
+        types: [{ description: "png", accept: { "image/png": [".png"] } }],
+      });
+    } catch (e) {
+      if ((e as Error).name === "AbortError") return;
+      toast.error("Failed to start export", { description: (e as Error).message });
       return;
     }
 
-    const projectName = project.name().replace(/\s+/g, "-").toLowerCase();
-    await downloadObject(blob, `${projectName}-frame.png`);
+    const progress = toast.loading("Exporting image...");
+    let capture: Awaited<ReturnType<typeof createCapture>> | undefined;
+    try {
+      capture = await createCapture(world, scene, { dir: project.dir() });
+      const encoder = await createImageEncoder(capture.world, { frames: [frame], resolution: height });
+      const result = await encoder.render();
+      if (result.type === "canceled") {
+        toast.dismiss(progress);
+        return;
+      }
+      if (result.type === "error") throw result.error;
+
+      const writable = await target.createWritable();
+      // Copied onto a plain ArrayBuffer, which is what a file write takes.
+      await writable.write(new Uint8Array(result.data[0]!.png));
+      await writable.close();
+      toast.dismiss(progress);
+      toast("Export complete", { description: "Your image has been successfully exported" });
+    } catch (e) {
+      console.error("Image export failed:", e);
+      toast.dismiss(progress);
+      toast.error("Export failed", { description: (e as Error).message });
+    } finally {
+      capture?.dispose();
+    }
   };
 
   const exportActiveScene = () => {
@@ -136,7 +193,7 @@ export function ExportProvider(props: { children: JSX.Element }) {
   /**
    * Export is the provider's command, so its keys are bound here rather than
    * in the engine's shortcut table: ⌘E writes the active scene, ⇧⌘E the frame
-   * on screen — the same two the File menu lists.
+   * at its playhead — the same two the File menu lists.
    */
   const handleShortcut = (event: KeyboardEvent) => {
     if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "e") return;
@@ -151,7 +208,7 @@ export function ExportProvider(props: { children: JSX.Element }) {
   onCleanup(() => window.removeEventListener("keydown", handleShortcut));
 
   return (
-    <ExportContext.Provider value={{ exportScene, exportCurrentFrame, exporting }}>
+    <ExportContext.Provider value={{ exportScene, exportCurrentFrame, exportFrame, exporting }}>
       {props.children}
       <ExportProgress
         open={!!renderOverlay()}
