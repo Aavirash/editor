@@ -13,6 +13,11 @@ import { Icon } from "@/components/ui/icon"
 
 export const DropdownMenuPortal = DropdownMenuPrimitive.Portal
 
+/** Keeps the horizontal offset the submenu had as a `translate-x-2.5` class. */
+const SUB_GUTTER = 10
+/** Lifts a submenu by its padding + border so its first item lines up with the trigger. */
+const SUB_SHIFT = -9
+
 export type DropdownMenuProps = ComponentProps<typeof DropdownMenuPrimitive>
 
 export const DropdownMenu = (props: DropdownMenuProps) => {
@@ -63,7 +68,12 @@ export type DropdownMenuSubProps = ComponentProps<
 >
 
 export const DropdownMenuSub = (props: DropdownMenuSubProps) => {
-  return <DropdownMenuPrimitive.Sub data-slot="dropdown-menu-sub" {...props} />
+  const merge = mergeProps<DropdownMenuSubProps[]>(
+    { gutter: SUB_GUTTER, shift: SUB_SHIFT },
+    props,
+  )
+
+  return <DropdownMenuPrimitive.Sub data-slot="dropdown-menu-sub" {...merge} />
 }
 
 export type DropdownMenuRadioGroupProps<T extends ValidComponent = "div"> =
@@ -126,7 +136,7 @@ export const DropdownMenuSubContent = <T extends ValidComponent = "div">(
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"
       class={cx(
-        "bg-popover translate-x-2.5 -translate-y-2 text-popover-foreground data-[expanded]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[expanded]:fade-in-0 data-[closed]:zoom-out-95 data-[expanded]:zoom-in-95 z-[10000] min-w-[8rem] origin-(--kb-menu-content-transform-origin) overflow-x-hidden overflow-y-auto flex flex-col gap-2 rounded-xl border border-border p-2 shadow-[0px_0px_1px_2px_rgba(0,0,0,0.12),0px_4px_12px_8px_rgba(0,0,0,0.12),0px_12px_16px_0px_rgba(0,0,0,0.16)] outline-none max-h-[var(--kb-popper-content-available-height)]",
+        "bg-popover text-popover-foreground data-[expanded]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[expanded]:fade-in-0 data-[closed]:zoom-out-95 data-[expanded]:zoom-in-95 z-[10000] min-w-[8rem] origin-(--kb-menu-content-transform-origin) overflow-x-hidden overflow-y-auto flex flex-col gap-2 rounded-xl border border-border p-2 shadow-[0px_0px_1px_2px_rgba(0,0,0,0.12),0px_4px_12px_8px_rgba(0,0,0,0.12),0px_12px_16px_0px_rgba(0,0,0,0.16)] outline-none max-h-[var(--kb-popper-content-available-height)]",
         "[[data-popper-positioner][style*='--kb-popper-content-transform-origin:_top']>[data-slot=dropdown-menu-sub-content]]:slide-in-from-top-2 [[data-popper-positioner][style*='--kb-popper-content-transform-origin:_bottom']>[data-slot=dropdown-menu-sub-content]]:slide-in-from-bottom-2 [[data-popper-positioner][style*='--kb-popper-content-transform-origin:_left']>[data-slot=dropdown-menu-sub-content]]:slide-in-from-left-2 [[data-popper-positioner][style*='--kb-popper-content-transform-origin:_right']>[data-slot=dropdown-menu-sub-content]]:slide-in-from-right-2",
         props.class,
       )}
@@ -206,14 +216,14 @@ export const DropdownMenuCheckboxItem = <T extends ValidComponent = "div">(
     <DropdownMenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
       class={cx(
-        "h-7 group data-highlighted:bg-primary data-highlighted:text-foreground relative flex cursor-default items-center gap-0 rounded-sm py-1.5 pr-2 pl-7 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-6",
+        "group data-[highlighted]:bg-primary data-[highlighted]:text-primary-foreground relative flex cursor-default items-center gap-1 rounded-md bg-popover pr-2 pl-7 py-0 text-xs outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-7 w-full",
         props.class,
       )}
       {...rest}
     >
-      <span class="pointer-events-none absolute left-0 flex size-6 items-center justify-center">
+      <span class="pointer-events-none absolute left-0.5 flex size-6 items-center justify-center">
         <DropdownMenuPrimitive.ItemIndicator>
-          <Icon name="confirm-check" class="text-foreground" />
+          <Icon name="confirm-check" class="text-foreground group-data-[highlighted]:text-primary-foreground" />
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {props.children}
@@ -236,28 +246,14 @@ export const DropdownMenuRadioItem = <T extends ValidComponent = "div">(
     <DropdownMenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
       class={cx(
-        "group data-[highlighted]:bg-primary relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "group data-[highlighted]:bg-primary data-[highlighted]:text-primary-foreground relative flex cursor-default items-center gap-1 rounded-md bg-popover pr-2 pl-7 py-0 text-xs outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-7 w-full",
         props.class,
       )}
       {...rest}
     >
-      <span class="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
-        <DropdownMenuPrimitive.ItemIndicator
-          as="svg"
-          xmlns="http://www.w3.org/2000/svg"
-          class="size-1"
-          viewBox="0 0 24 24"
-        >
-          <circle
-            cx="12"
-            cy="12"
-            r="10"
-            fill="currentColor"
-            stroke="currentColor"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-          />
+      <span class="pointer-events-none absolute left-0.5 flex size-6 items-center justify-center">
+        <DropdownMenuPrimitive.ItemIndicator>
+          <Icon name="confirm-check" class="text-foreground group-data-[highlighted]:text-primary-foreground" />
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {props.children}

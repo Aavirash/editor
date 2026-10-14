@@ -5,13 +5,16 @@
 // Copied from https://shadcn-solid.netlify.app/docs/components/context-menu
 
 import type { Accessor, ComponentProps, ValidComponent } from "solid-js"
-import { createContext, splitProps, useContext } from "solid-js"
+import { createContext, mergeProps, splitProps, useContext } from "solid-js"
 import { ContextMenu as ContextMenuPrimitive } from "@kobalte/core/context-menu"
 
 import { Icon } from "@/components/ui/icon"
 import { cx } from "@/lib/cva"
 
 export const ContextMenuPortal = ContextMenuPrimitive.Portal
+
+/** Lifts a submenu by its padding + border so its first item lines up with the trigger. */
+const SUB_SHIFT = -9
 const ContextMenuContentDisabledContext = createContext<Accessor<boolean>>()
 
 const useContextMenuContentDisabled = () => {
@@ -51,7 +54,12 @@ export type ContextMenuSubProps = ComponentProps<
 >
 
 export const ContextMenuSub = (props: ContextMenuSubProps) => {
-  return <ContextMenuPrimitive.Sub data-slot="context-menu-sub" {...props} />
+  const merge = mergeProps<ContextMenuSubProps[]>(
+    { shift: SUB_SHIFT },
+    props,
+  )
+
+  return <ContextMenuPrimitive.Sub data-slot="context-menu-sub" {...merge} />
 }
 
 export type ContextMenuRadioGroupProps<T extends ValidComponent = "div"> =

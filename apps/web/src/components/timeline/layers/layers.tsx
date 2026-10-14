@@ -21,7 +21,9 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuItemDetail,
   DropdownMenuPortal,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -218,47 +220,48 @@ export function Layers() {
                 <DropdownMenuContent class="w-[180px]">
                   <DropdownMenuItem onSelect={addLayer}>Add layer</DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger>Layer height</DropdownMenuSubTrigger>
-                    <DropdownMenuPortal>
-                      <DropdownMenuSubContent class="w-[140px]">
-                        <Index each={HEIGHT_PRESETS}>
-                          {(preset) => (
-                            <DropdownMenuCheckboxItem
-                              onSelect={() => setCommonHeight(preset().height)}
-                              checked={commonHeight() === preset().height}
-                            >
-                              {preset().label}
-                              <span class="text-xxs text-muted-foreground ml-auto">{preset().height}</span>
-                            </DropdownMenuCheckboxItem>
-                          )}
-                        </Index>
-                      </DropdownMenuSubContent>
-                    </DropdownMenuPortal>
-                  </DropdownMenuSub>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger>Time format</DropdownMenuSubTrigger>
-                    <DropdownMenuPortal>
-                      <DropdownMenuSubContent class="w-[200px]">
-                        <DropdownMenuRadioGroup
-                          value={timeFormat()}
-                          onChange={(value) => setTimeFormat(value as TimeFormat)}
-                        >
-                          <Index each={TIME_FORMAT_OPTIONS}>
-                            {(option) => (
-                              <DropdownMenuRadioItem value={option().value}>
-                                {option().label}
-                                <span class="text-xxs text-muted-foreground ml-auto">
-                                  {option().example}
-                                </span>
-                              </DropdownMenuRadioItem>
-                            )}
-                          </Index>
-                        </DropdownMenuRadioGroup>
-                      </DropdownMenuSubContent>
-                    </DropdownMenuPortal>
-                  </DropdownMenuSub>
+                  <DropdownMenuGroup>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>Layer height</DropdownMenuSubTrigger>
+                      <DropdownMenuPortal>
+                        <DropdownMenuSubContent class="w-[160px]">
+                          <DropdownMenuGroup>
+                            <Index each={HEIGHT_PRESETS}>
+                              {(preset) => (
+                                <DropdownMenuCheckboxItem
+                                  onSelect={() => setCommonHeight(preset().height)}
+                                  checked={commonHeight() === preset().height}
+                                >
+                                  {preset().label}
+                                  <DropdownMenuItemDetail class="ml-auto">{preset().height}</DropdownMenuItemDetail>
+                                </DropdownMenuCheckboxItem>
+                              )}
+                            </Index>
+                          </DropdownMenuGroup>
+                        </DropdownMenuSubContent>
+                      </DropdownMenuPortal>
+                    </DropdownMenuSub>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>Time format</DropdownMenuSubTrigger>
+                      <DropdownMenuPortal>
+                        <DropdownMenuSubContent class="w-[200px]">
+                          <DropdownMenuRadioGroup
+                            value={timeFormat()}
+                            onChange={(value) => setTimeFormat(value as TimeFormat)}
+                          >
+                            <Index each={TIME_FORMAT_OPTIONS}>
+                              {(option) => (
+                                <DropdownMenuRadioItem value={option().value}>
+                                  {option().label}
+                                  <DropdownMenuItemDetail class="ml-auto">{option().example}</DropdownMenuItemDetail>
+                                </DropdownMenuRadioItem>
+                              )}
+                            </Index>
+                          </DropdownMenuRadioGroup>
+                        </DropdownMenuSubContent>
+                      </DropdownMenuPortal>
+                    </DropdownMenuSub>
+                  </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenuPortal>
             </DropdownMenu>

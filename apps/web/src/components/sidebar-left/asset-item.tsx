@@ -8,6 +8,7 @@ import { replaceAssetSource, saveAssetAs } from "@/engine/asset-actions";
 import {
   ContextMenu,
   ContextMenuContent,
+  ContextMenuGroup,
   ContextMenuItem,
   ContextMenuPortal,
   ContextMenuSeparator,
@@ -158,28 +159,32 @@ export function LazyAssetItem(props: LazyAssetItemProps) {
             <ContextMenuSubTrigger>Insert...</ContextMenuSubTrigger>
             <ContextMenuPortal>
               <ContextMenuSubContent class="w-[180px]">
-                <ContextMenuItem onSelect={props.onInsertAtStart}>
-                  Insert at start
-                  <ContextMenuShortcut>⇧,</ContextMenuShortcut>
-                </ContextMenuItem>
-                <ContextMenuItem onSelect={props.onInsertAtPlayhead}>
-                  Insert at playhead
-                  <ContextMenuShortcut>,</ContextMenuShortcut>
-                </ContextMenuItem>
+                <ContextMenuGroup>
+                  <ContextMenuItem onSelect={props.onInsertAtStart}>
+                    Insert at start
+                    <ContextMenuShortcut>⇧,</ContextMenuShortcut>
+                  </ContextMenuItem>
+                  <ContextMenuItem onSelect={props.onInsertAtPlayhead}>
+                    Insert at playhead
+                    <ContextMenuShortcut>,</ContextMenuShortcut>
+                  </ContextMenuItem>
+                </ContextMenuGroup>
               </ContextMenuSubContent>
             </ContextMenuPortal>
           </ContextMenuSub>
           <Show when={!props.multiple}>
             <ContextMenuSeparator />
-            <ContextMenuItem onSelect={() => setIsRenaming(true)}>
-              Rename
-            </ContextMenuItem>
-            <ContextMenuItem onSelect={handleReplaceMedia}>
-              Replace
-            </ContextMenuItem>
-            <ContextMenuItem onSelect={handleSaveAs}>
-              Save as
-            </ContextMenuItem>
+            <ContextMenuGroup>
+              <ContextMenuItem onSelect={() => setIsRenaming(true)}>
+                Rename
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={handleReplaceMedia}>
+                Replace
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={handleSaveAs}>
+                Save as
+              </ContextMenuItem>
+            </ContextMenuGroup>
           </Show>
           <ContextMenuSeparator />
           <ContextMenuItem onSelect={props.onDelete}>
