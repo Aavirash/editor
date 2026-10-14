@@ -57,6 +57,11 @@ export type Command = CommandAction & {
   keywords?: string[];
   /** The keys it is bound to, one cap each (["⌘", "K"]); shown, not bound. */
   shortcut?: string[];
+  /**
+   * Where it is listed in its section, lowest first; 0 when left out.
+   * Commands with the same index keep the order they registered in.
+   */
+  order?: number;
   /** Whether it is offered right now; always, when left out. */
   available?(): boolean;
 };

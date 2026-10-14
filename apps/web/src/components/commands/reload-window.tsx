@@ -13,6 +13,7 @@ export function ReloadWindowCommand() {
     icon: "reload",
     keywords: ["refresh", "restart"],
     shortcut: ["⌘", "R"],
+    order: 1,
     run: () => window.location.reload(),
   });
 

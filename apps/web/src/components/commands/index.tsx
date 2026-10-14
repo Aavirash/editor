@@ -9,6 +9,7 @@ import { ExportCurrentFrameCommand } from "./export-current-frame";
 import { ExportVideoCommand } from "./export-video";
 import { GenerateCommand } from "./generate";
 import { MakeVideoCommand } from "./make-video";
+import { ProjectFolderCommands } from "./project-folder";
 import { RemoveBackgroundCommand } from "./remove-background";
 import { RerunCommand } from "./rerun";
 import { ReuseSettingsCommand } from "./reuse-settings";
@@ -22,7 +23,8 @@ export { ReloadWindowCommand } from "./reload-window";
 
 /**
  * The canvas's commands: what to generate, what the selected media can be
- * run through, the toolbar's tools, and the keyboard shortcuts.
+ * run through, the toolbar's tools, the keyboard shortcuts, and where else
+ * the project folder can be opened.
  */
 export function CanvasCommands() {
   return (
@@ -50,6 +52,7 @@ export function CanvasCommands() {
       <ToolCommand tool={ToolType.PEN} />
       <ToolCommand tool={ToolType.TEXT} />
       <ShortcutCommands />
+      <ProjectFolderCommands />
     </>
   );
 }

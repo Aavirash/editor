@@ -73,7 +73,8 @@ type ListedSection = { name: string; commands: RegisteredCommand[] };
 
 /**
  * The commands on offer that match `search`, in sections. Without a search,
- * sections in `SECTIONS` order and commands in the order they registered;
+ * sections in `SECTIONS` order and commands by `order`, then in the order
+ * they registered;
  * with one, the best match first, and the section it is in. cmdk scores,
  * but leaves the order alone under Solid.
  */
@@ -86,7 +87,12 @@ function rank(commands: RegisteredCommand[], search: string): ListedSection[] {
       score: query ? defaultFilter(command.title, query, [command.group, ...(command.keywords ?? [])]) : 1,
     }))
     .filter((match) => match.score >= MIN_SCORE)
-    .sort((a, b) => b.score - a.score || SECTIONS.indexOf(a.command.group) - SECTIONS.indexOf(b.command.group));
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        SECTIONS.indexOf(a.command.group) - SECTIONS.indexOf(b.command.group) ||
+        (a.command.order ?? 0) - (b.command.order ?? 0),
+    );
 
   const byName = new Map<string, RegisteredCommand[]>();
   for (const { command } of matches) {
