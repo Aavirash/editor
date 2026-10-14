@@ -25,6 +25,7 @@ type CommandAction =
     /** What picking it does. */
     run(): void;
     bar?: never;
+    ready?: never;
   }
   | {
     /**
@@ -34,6 +35,15 @@ type CommandAction =
      */
     bar: Component;
     run?: never;
+    ready?: never;
+  }
+  | {
+    /** What picking it does while `ready`: what the bar would ask for is settled already. */
+    run(): void;
+    /** The bar picking it puts up otherwise. */
+    bar: Component;
+    /** Whether it can run without the bar (what it runs over is selected). */
+    ready(): boolean;
   };
 
 export type Command = CommandAction & {
@@ -77,8 +87,11 @@ export function CommandsProvider(props: { children: JSX.Element }) {
 
   const execute = (command: RegisteredCommand) => {
     setPaletteOpen(false);
-    if (command.bar) setActive(command);
-    else command.run();
+    if (!command.bar || command.ready?.()) {
+      command.run?.();
+    } else {
+      setActive(command);
+    }
   };
 
   const register = (command: RegisteredCommand) => {

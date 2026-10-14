@@ -5,15 +5,21 @@
 import { Separator } from "@/components/ui/separator";
 import { useCommand, useCommands } from "@/context/commands";
 import { useAutoCaptions } from "@/components/genai/use-auto-captions";
+import { useSelection } from "@/engine/hooks";
 import { ActionBar, ActionBarCancel, ActionBarConfirm, ActionBarTarget } from "@/components/canvas/action-bar";
 
 export function AutoCaptionsCommand() {
+  const { nodes } = useSelection();
+  const { scene, generate } = useAutoCaptions();
+
   useCommand({
     id: "auto-captions",
     title: "Generate captions",
     group: "Media",
     icon: "captions",
     keywords: ["auto-captions", "subtitles", "transcribe"],
+    ready: () => !!scene() && nodes().includes(scene()!),
+    run: generate,
     bar: AutoCaptionsBar,
   });
 
