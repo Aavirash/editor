@@ -129,7 +129,7 @@ function PaletteContent(props: { onPick(command: RegisteredCommand): void }) {
                   <CommandPrimitive.Item
                     value={command.id}
                     onSelect={() => props.onPick(command)}
-                    class="flex h-8 cursor-default items-center gap-1.5 rounded-lg px-1.5 text-sm text-foreground outline-hidden select-none data-[selected=true]:bg-input [&_svg]:text-muted-foreground data-[selected=true]:[&_svg]:text-foreground"
+                    class="flex h-10 cursor-default items-center gap-1.5 rounded-lg px-1.5 text-sm text-foreground outline-hidden select-none data-[selected=true]:bg-input [&_svg]:text-muted-foreground data-[selected=true]:[&_svg]:text-foreground"
                   >
                     <Show when={command.icon} fallback={<span class="size-[25px] shrink-0" />}>
                       {(icon) => <Icon name={icon()} />}

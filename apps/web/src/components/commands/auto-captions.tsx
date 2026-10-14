@@ -10,10 +10,10 @@ import { ActionBar, ActionBarCancel, ActionBarConfirm, ActionBarTarget } from "@
 export function AutoCaptionsCommand() {
   useCommand({
     id: "auto-captions",
-    title: "Auto-captions",
+    title: "Generate captions",
     group: "Media",
     icon: "captions",
-    keywords: ["subtitles", "transcribe"],
+    keywords: ["auto-captions", "subtitles", "transcribe"],
     bar: AutoCaptionsBar,
   });
 
