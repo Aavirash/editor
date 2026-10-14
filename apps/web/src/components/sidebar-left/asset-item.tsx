@@ -12,6 +12,9 @@ import {
   ContextMenuPortal,
   ContextMenuSeparator,
   ContextMenuShortcut,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "../ui/context-menu";
 import { AssetThumbnail } from "../ui/asset-thumbnail";
@@ -29,8 +32,10 @@ export type LazyAssetItemProps = {
   onSelect(event: MouseEvent): void;
   onContextSelect(): void;
   onDragStart(event: DragEvent): void;
+  /** Inserts the selection at the start of the timeline. */
+  onInsertAtStart(): void;
   /** Inserts the selection at the playhead. */
-  onInsert(): void;
+  onInsertAtPlayhead(): void;
   /** Deletes the selection. */
   onDelete(): void;
 };
@@ -149,9 +154,21 @@ export function LazyAssetItem(props: LazyAssetItemProps) {
       </ContextMenuTrigger>
       <ContextMenuPortal>
         <ContextMenuContent class="w-[180px]">
-          <ContextMenuItem onSelect={props.onInsert}>
-            Insert at playhead
-          </ContextMenuItem>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>Insert...</ContextMenuSubTrigger>
+            <ContextMenuPortal>
+              <ContextMenuSubContent class="w-[180px]">
+                <ContextMenuItem onSelect={props.onInsertAtStart}>
+                  Insert at start
+                  <ContextMenuShortcut>⇧,</ContextMenuShortcut>
+                </ContextMenuItem>
+                <ContextMenuItem onSelect={props.onInsertAtPlayhead}>
+                  Insert at playhead
+                  <ContextMenuShortcut>,</ContextMenuShortcut>
+                </ContextMenuItem>
+              </ContextMenuSubContent>
+            </ContextMenuPortal>
+          </ContextMenuSub>
           <Show when={!props.multiple}>
             <ContextMenuSeparator />
             <ContextMenuItem onSelect={() => setIsRenaming(true)}>

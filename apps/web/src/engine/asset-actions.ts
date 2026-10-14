@@ -82,3 +82,13 @@ export function insertAssetsAtPlayhead(world: World, assets: ReadonlyArray<Asset
   }
 }
 
+/** Inserts each of `assets` at the start of the timeline, all starting there. */
+export function insertAssetsAtStart(world: World, assets: ReadonlyArray<Asset>): void {
+  for (const asset of assets) {
+    if (!insertAsset(world, asset, { start: 0 })) {
+      toast("Nothing to insert into", { description: "Open a project first." });
+      return;
+    }
+  }
+}
+

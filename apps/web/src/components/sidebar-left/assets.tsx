@@ -15,9 +15,17 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuPortal,
-  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuPortal,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from "../ui/context-menu";
 import { toast } from "somoto";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -32,7 +40,7 @@ import { LazyAssetItem } from "./asset-item";
 import { FolderItem, handleFolderDrop, isAssetOrFolderDrag, ASSET_DRAG_TYPE, FOLDER_DRAG_TYPE } from "./folder-item";
 import { useLibrary } from "@/engine/library";
 import { useAssetSelection } from "@/engine/hooks";
-import { droppedFiles, importFiles, insertAssetsAtPlayhead, pickAndImport } from "@/engine/asset-actions";
+import { droppedFiles, importFiles, insertAssetsAtPlayhead, insertAssetsAtStart, pickAndImport } from "@/engine/asset-actions";
 import { isInputTarget } from "@/utils";
 import { useCommand } from "@/context/commands";
 
@@ -237,7 +245,8 @@ export function Assets() {
     return assetSelection.ids().map((id) => lib.get(id)).filter((asset) => asset !== undefined);
   };
 
-  const insertSelection = () => insertAssetsAtPlayhead(world, selectedAssets());
+  const insertSelectionAtStart = () => insertAssetsAtStart(world, selectedAssets());
+  const insertSelectionAtPlayhead = () => insertAssetsAtPlayhead(world, selectedAssets());
 
   const deleteSelection = async () => {
     const lib = library();
@@ -308,7 +317,7 @@ export function Assets() {
     return run(lib);
   };
 
-  const handleImportAssets = () => withLibrary((lib) => pickAndImport(lib, currentFolder()).then(() => {}));
+  const handleImportAssets = () => withLibrary((lib) => pickAndImport(lib, currentFolder()).then(() => { }));
 
   const handleDrop = async (event: DragEvent) => {
     event.preventDefault();
@@ -391,8 +400,9 @@ export function Assets() {
   /**
    * Finder's keys for the grid: arrows move the selection and Shift-arrows
    * grow it, ⌘A selects every item in view and ⌥⌘A or Escape none, ⌘↓ opens
-   * the selected folder and ⌘↑ goes up, ⌫ deletes the selection. Handled keys
-   * stop here, so the canvas does not act on them too.
+   * the selected folder and ⌘↑ goes up, ⌫ deletes the selection, , inserts it
+   * at the playhead and ⇧, at the start of the timeline. Handled keys stop
+   * here, so the canvas does not act on them too.
    */
   const handleKeyDown = (event: KeyboardEvent) => {
     const target = event.target as HTMLElement | null;
@@ -419,6 +429,16 @@ export function Assets() {
         handleGoToParent();
       }
 
+      return;
+    }
+
+    // By code: ⇧ turns the comma of ⇧, into another character.
+    if (!command && !event.altKey && event.code === "Comma") {
+      if (assetSelection.ids().length === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.shiftKey) insertSelectionAtStart();
+      else insertSelectionAtPlayhead();
       return;
     }
 
@@ -577,41 +597,19 @@ export function Assets() {
               </DropdownMenuPortal>
             </DropdownMenu>
           </Show>
-          <DropdownMenu placement="bottom-start">
-            <Tooltip>
-              <TooltipTrigger<typeof DropdownMenuTrigger>
-                as={(triggerProps: object) => (
-                  <DropdownMenuTrigger<typeof Button>
-                    {...triggerProps}
-                    as={(buttonProps) => (
-                      <Button
-                        {...buttonProps}
-                        size="icon"
-                        variant="ghost"
-                        aria-label="Add assets"
-                        class="text-muted-foreground data-expanded:bg-accent data-expanded:text-foreground"
-                      >
-                        <Icon name="plus-add" />
-                      </Button>
-                    )}
-                  />
-                )}
-              />
-              <TooltipContent shortcut="⌘I">Import assets</TooltipContent>
-            </Tooltip>
-            <DropdownMenuPortal>
-              <DropdownMenuContent class="w-40">
-                <DropdownMenuItem tone="neutral" onSelect={handleImportAssets}>
-                  Import assets
-                  <DropdownMenuShortcut>⌘I</DropdownMenuShortcut>
-                </DropdownMenuItem>
-                <DropdownMenuItem tone="neutral" onSelect={handleCreateFolder}>
-                  Create folder
-                  <DropdownMenuShortcut>⇧⌘N</DropdownMenuShortcut>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenuPortal>
-          </DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger
+              as={Button}
+              size="icon"
+              variant="ghost"
+              aria-label="Import assets"
+              class="text-muted-foreground"
+              onClick={handleImportAssets}
+            >
+              <Icon name="plus-add" />
+            </TooltipTrigger>
+            <TooltipContent shortcut="⌘I">Import assets</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -697,74 +695,107 @@ export function Assets() {
             </div>
           </div>
         </Show>
-        <div
-          ref={scroller}
-          class="flex-1 min-h-0 overflow-y-auto p-4 pt-3"
-          onClick={handleBackgroundClick}
-        >
-          <Show when={isEmptyView() && !isFiltering()}>
-            <div class="h-full flex flex-col items-center justify-center gap-4 px-6 pb-[88px] pt-4">
-              <div class="flex flex-col items-center gap-1">
-                <Icon name="navigation.folder" class="size-8 text-muted-foreground" />
-                <span class="text-xs font-450 text-muted-foreground">
-                  Add media
-                </span>
-                <p class="text-xxs text-muted-foreground text-center">
-                  Drag here, import from your computer,{"\n"}
-                  or, generate something new with AI.
-                </p>
+        {/* The grid's own items open their own menus and stop the event,
+            so this one only answers a right-click on empty space. */}
+        <ContextMenu>
+          <ContextMenuTrigger
+            as="div"
+            ref={scroller}
+            class="flex-1 min-h-0 overflow-y-auto p-4 pt-3"
+            onClick={handleBackgroundClick}
+          >
+            <Show when={isEmptyView() && !isFiltering()}>
+              <div class="h-full flex flex-col items-center justify-center gap-4 px-6 pb-[88px] pt-4">
+                <div class="flex flex-col items-center gap-1">
+                  <Icon name="navigation.folder" class="size-8 text-muted-foreground" />
+                  <span class="text-xs font-450 text-muted-foreground">
+                    Add media
+                  </span>
+                  <p class="text-xxs text-muted-foreground text-center">
+                    Drag here, import from your computer,{"\n"}
+                    or, generate something new with AI.
+                  </p>
+                </div>
+                <div class="flex flex-col gap-2 w-full">
+                  <Button variant="secondary" class="w-full" onClick={() => openPromptInput(restoreConfig("IMAGE"))}>
+                    Generate with AI
+                  </Button>
+                  <Button variant="default" class="w-full" onClick={handleImportAssets}>
+                    Import media
+                  </Button>
+                </div>
               </div>
-              <div class="flex flex-col gap-2 w-full">
-                <Button variant="secondary" class="w-full" onClick={() => openPromptInput(restoreConfig("IMAGE"))}>
-                  Generate with AI
-                </Button>
-                <Button variant="default" class="w-full" onClick={handleImportAssets}>
-                  Import media
-                </Button>
+            </Show>
+            <Show when={isEmptyView() && isFiltering()}>
+              <div class="h-full flex items-center justify-center text-xs text-muted-foreground">
+                No matching assets
               </div>
-            </div>
-          </Show>
-          <Show when={isEmptyView() && isFiltering()}>
-            <div class="h-full flex items-center justify-center text-xs text-muted-foreground">
-              No matching assets
-            </div>
-          </Show>
-          <Show when={!isEmptyView()}>
-            <div class="grid grid-cols-2 gap-x-2 gap-y-4">
-              <For each={visibleFolders()}>
-                {(folder) => (
-                  <FolderItem
-                    path={folder}
-                    renaming={renamingFolder() === folder}
-                    selected={selectedKeys().has(folderKey(folder))}
-                    multiple={selectedKeys().size > 1 && selectedKeys().has(folderKey(folder))}
-                    onSelect={(event) => handleItemClick(folderKey(folder), event)}
-                    onContextSelect={() => handleItemContextMenu(folderKey(folder))}
-                    onDragStart={(event) => handleItemDragStart(folderKey(folder), event)}
-                    onRenameStart={() => setRenamingFolder(folder)}
-                    onRenameEnd={() => setRenamingFolder(null)}
-                    onOpen={() => openFolder(folder)}
-                    onDelete={deleteSelection}
-                  />
-                )}
-              </For>
-              <For each={filteredAssets()}>
-                {(asset) => (
-                  <LazyAssetItem
-                    asset={asset}
-                    selected={selectedKeys().has(assetKey(asset.id))}
-                    multiple={selectedKeys().size > 1 && selectedKeys().has(assetKey(asset.id))}
-                    onSelect={(event) => handleItemClick(assetKey(asset.id), event)}
-                    onContextSelect={() => handleItemContextMenu(assetKey(asset.id))}
-                    onDragStart={(event) => handleItemDragStart(assetKey(asset.id), event)}
-                    onInsert={insertSelection}
-                    onDelete={deleteSelection}
-                  />
-                )}
-              </For>
-            </div>
-          </Show>
-        </div>
+            </Show>
+            <Show when={!isEmptyView()}>
+              <div class="grid grid-cols-2 gap-x-2 gap-y-4">
+                <For each={visibleFolders()}>
+                  {(folder) => (
+                    <FolderItem
+                      path={folder}
+                      renaming={renamingFolder() === folder}
+                      selected={selectedKeys().has(folderKey(folder))}
+                      multiple={selectedKeys().size > 1 && selectedKeys().has(folderKey(folder))}
+                      onSelect={(event) => handleItemClick(folderKey(folder), event)}
+                      onContextSelect={() => handleItemContextMenu(folderKey(folder))}
+                      onDragStart={(event) => handleItemDragStart(folderKey(folder), event)}
+                      onRenameStart={() => setRenamingFolder(folder)}
+                      onRenameEnd={() => setRenamingFolder(null)}
+                      onOpen={() => openFolder(folder)}
+                      onDelete={deleteSelection}
+                    />
+                  )}
+                </For>
+                <For each={filteredAssets()}>
+                  {(asset) => (
+                    <LazyAssetItem
+                      asset={asset}
+                      selected={selectedKeys().has(assetKey(asset.id))}
+                      multiple={selectedKeys().size > 1 && selectedKeys().has(assetKey(asset.id))}
+                      onSelect={(event) => handleItemClick(assetKey(asset.id), event)}
+                      onContextSelect={() => handleItemContextMenu(assetKey(asset.id))}
+                      onDragStart={(event) => handleItemDragStart(assetKey(asset.id), event)}
+                      onInsertAtStart={insertSelectionAtStart}
+                      onInsertAtPlayhead={insertSelectionAtPlayhead}
+                      onDelete={deleteSelection}
+                    />
+                  )}
+                </For>
+              </div>
+            </Show>
+          </ContextMenuTrigger>
+          <ContextMenuPortal>
+            <ContextMenuContent class="w-52">
+              <ContextMenuItem onSelect={handleImportAssets}>
+                Import assets
+                <ContextMenuShortcut>⌘I</ContextMenuShortcut>
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={() => openPromptInput(restoreConfig("IMAGE"))}>
+                Generate with AI
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onSelect={handleCreateFolder}>
+                Create folder
+                <ContextMenuShortcut>⇧⌘N</ContextMenuShortcut>
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem disabled={visibleKeys().length === 0} onSelect={selectAll}>
+                Select all
+                <ContextMenuShortcut>⌘A</ContextMenuShortcut>
+              </ContextMenuItem>
+              <Show when={currentFolder() !== ""}>
+                <ContextMenuItem onSelect={handleGoToParent}>
+                  Go to parent folder
+                  <ContextMenuShortcut>⌘↑</ContextMenuShortcut>
+                </ContextMenuItem>
+              </Show>
+            </ContextMenuContent>
+          </ContextMenuPortal>
+        </ContextMenu>
       </div>
     </div>
   );
