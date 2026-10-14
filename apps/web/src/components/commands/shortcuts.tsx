@@ -8,13 +8,24 @@
 
 import { For } from "solid-js";
 import { useWorld } from "@diffusionstudio/koota-solid";
-import { getActiveEntity, isGroupLike, isSequence, togglePlayback } from "@diffusionstudio/runtime";
+import {
+  FrameRate,
+  getActiveEntity,
+  isGroupLike,
+  isSequence,
+  shuttlePlayback,
+  stopPlayback,
+  togglePlayback,
+} from "@diffusionstudio/runtime";
 import { useCommand } from "@/context/commands";
 import {
   getEditHistory,
   groupSelection,
   redoEdit,
   restackSelection,
+  seekBy,
+  seekToSelectionEdge,
+  seekToTimelineEdge,
   splitAtPlayhead,
   toggleSelectionHidden,
   undoEdit,
@@ -53,6 +64,17 @@ type Shortcut = {
 
 const selection = ({ nodes }: ShortcutState) => nodes.length > 0;
 const activeScene = ({ scene }: ShortcutState) => scene !== null;
+/** Clips to seek to the edges of: the active scene is where they are, not one of them. */
+const selectedClips = ({ nodes, scene }: ShortcutState) => scene !== null && nodes.some((node) => node !== scene);
+
+/** Runs `action` on the active scene, if there is one. */
+const onActiveScene = (action: (world: World, scene: Entity) => void) => (world: World) => {
+  const scene = getActiveEntity(world);
+  if (scene) action(world, scene);
+};
+
+const seekSeconds = (seconds: number) => (world: World) =>
+  seekBy(world, Math.round(seconds * (world.get(FrameRate)?.value ?? 30)));
 
 const SHORTCUTS: Shortcut[] = [
   {
@@ -138,11 +160,118 @@ const SHORTCUTS: Shortcut[] = [
     icon: "play",
     keys: ["Space"],
     keywords: ["playback", "stop"],
-    run: (world) => {
-      const scene = getActiveEntity(world);
-      if (scene) togglePlayback(world, scene);
-    },
+    run: onActiveScene(togglePlayback),
     available: activeScene,
+  },
+  {
+    id: "play-forward",
+    title: "Play forward",
+    group: "Timeline",
+    icon: "timeline.shuttle-forward",
+    keys: ["L"],
+    keywords: ["shuttle", "faster"],
+    run: onActiveScene((world, scene) => shuttlePlayback(world, scene, 1)),
+    available: activeScene,
+  },
+  {
+    id: "play-backward",
+    title: "Play backward",
+    group: "Timeline",
+    icon: "timeline.shuttle-backward",
+    keys: ["J"],
+    keywords: ["shuttle", "reverse", "rewind"],
+    run: onActiveScene((world, scene) => shuttlePlayback(world, scene, -1)),
+    available: activeScene,
+  },
+  {
+    id: "stop-playback",
+    title: "Stop playback",
+    group: "Timeline",
+    icon: "timeline.stop",
+    keys: ["K"],
+    keywords: ["shuttle", "pause"],
+    run: onActiveScene(stopPlayback),
+    available: activeScene,
+  },
+  {
+    id: "next-frame",
+    title: "Go to next frame",
+    group: "Timeline",
+    icon: "timeline.next-frame",
+    keys: ["D"],
+    keywords: ["step", "jump", "forward"],
+    run: (world) => seekBy(world, 1),
+    available: activeScene,
+  },
+  {
+    id: "previous-frame",
+    title: "Go to previous frame",
+    group: "Timeline",
+    icon: "timeline.previous-frame",
+    keys: ["A"],
+    keywords: ["step", "jump", "back"],
+    run: (world) => seekBy(world, -1),
+    available: activeScene,
+  },
+  {
+    id: "skip-forward",
+    title: "Skip forward 1 second",
+    group: "Timeline",
+    icon: "timeline.skip-forward",
+    keys: ["W"],
+    keywords: ["jump", "seek"],
+    run: seekSeconds(1),
+    available: activeScene,
+  },
+  {
+    id: "skip-back",
+    title: "Skip back 1 second",
+    group: "Timeline",
+    icon: "timeline.skip-back",
+    keys: ["S"],
+    keywords: ["jump", "seek"],
+    run: seekSeconds(-1),
+    available: activeScene,
+  },
+  {
+    id: "go-to-start",
+    title: "Go to start",
+    group: "Timeline",
+    icon: "timeline.go-to-start",
+    keys: ["Home"],
+    keywords: ["jump", "beginning", "first frame"],
+    run: (world) => seekToTimelineEdge(world, "start"),
+    available: activeScene,
+  },
+  {
+    id: "go-to-end",
+    title: "Go to end",
+    group: "Timeline",
+    icon: "timeline.go-to-end",
+    keys: ["End"],
+    keywords: ["jump", "last frame"],
+    run: (world) => seekToTimelineEdge(world, "end"),
+    available: activeScene,
+  },
+  {
+    id: "go-to-selection-start",
+    title: "Go to selection start",
+    group: "Timeline",
+    icon: "timeline.go-to-selection-start",
+    keys: [";"],
+    keywords: ["jump", "clip", "in point"],
+    run: (world) => seekToSelectionEdge(world, "start"),
+    available: selectedClips,
+  },
+  {
+    id: "go-to-selection-end",
+    title: "Go to selection end",
+    group: "Timeline",
+    icon: "timeline.go-to-selection-end",
+    keys: ["'"],
+    keywords: ["jump", "clip", "out point"],
+    run: (world) => seekToSelectionEdge(world, "end"),
+    available: selectedClips,
   },
   {
     id: "split",
