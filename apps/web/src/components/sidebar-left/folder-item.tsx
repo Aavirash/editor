@@ -66,6 +66,8 @@ export type FolderItemProps = {
   onDragStart(event: DragEvent): void;
   onRenameStart(): void;
   onRenameEnd(): void;
+  /** Escape in the name field: keeps the old name. */
+  onRenameCancel(): void;
   onOpen(): void;
   /** Deletes the selection. */
   onDelete(): void;
@@ -111,15 +113,27 @@ export function FolderItem(props: FolderItemProps) {
       event.currentTarget.blur();
     } else if (event.key === "Escape") {
       event.preventDefault();
-      props.onRenameEnd();
+      props.onRenameCancel();
     }
   };
 
+  let input: HTMLInputElement | undefined;
+
   const handleFocusElement = (el: HTMLInputElement) => {
+    input = el;
     queueMicrotask(() => {
       el.focus();
       el.select();
     });
+  };
+
+  // The open menu traps focus, so "Rename" cannot focus the field; focus it
+  // once the menu is gone, instead of handing focus back to the trigger.
+  const handleMenuCloseAutoFocus = (event: Event) => {
+    if (!props.renaming || !input) return;
+    event.preventDefault();
+    input.focus();
+    input.select();
   };
 
   return (
@@ -175,7 +189,7 @@ export function FolderItem(props: FolderItemProps) {
         </Show>
       </ContextMenuTrigger>
       <ContextMenuPortal>
-        <ContextMenuContent class="w-[220px]">
+        <ContextMenuContent class="w-[220px]" onCloseAutoFocus={handleMenuCloseAutoFocus}>
           <Show when={!props.multiple}>
             <ContextMenuItem onSelect={props.onOpen}>Open</ContextMenuItem>
             <ContextMenuSeparator />

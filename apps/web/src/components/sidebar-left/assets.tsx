@@ -67,6 +67,7 @@ export function Assets() {
   let root: HTMLDivElement | undefined;
   let scroller: HTMLDivElement | undefined;
   let dragCounter = 0;
+  let createdFolder: string | null = null;
 
   const world = useWorld();
   const library = useLibrary();
@@ -76,6 +77,7 @@ export function Assets() {
   const [assetFilter, setAssetFilter] = createSignal<AssetFilter>("ALL");
   const [isDragging, setIsDragging] = createSignal(false);
   const [renamingFolder, setRenamingFolder] = createSignal<string | null>(null);
+
   const [currentFolder, setCurrentFolder] = createSignal("");
 
   const allAssets = createMemo(() => library()?.list().filter((asset) => asset.type !== "SCRIPT") ?? []);
@@ -532,8 +534,38 @@ export function Assets() {
     const parent = currentFolder();
     const name = lib.uniqueFolderName(parent, "New folder");
     const folder = lib.createFolder(parent ? `${parent}/${name}` : name);
+    createdFolder = folder;
     setRenamingFolder(folder);
   });
+
+  const handleRenameEnd = () => {
+    createdFolder = null;
+    setRenamingFolder(null);
+  };
+
+  // The open menu traps focus, so "Create folder" cannot focus the new folder's
+  // name field; focus it once the menu is gone, instead of the panel.
+  const handleMenuCloseAutoFocus = (event: Event) => {
+    const folder = renamingFolder();
+    if (!folder) return;
+    event.preventDefault();
+    const input = itemElement(folderKey(folder))?.querySelector("input");
+    input?.focus();
+    input?.select();
+  };
+
+  // Escape while naming a folder just created takes the folder back.
+  const handleRenameCancel = async (folder: string) => {
+    const created = createdFolder === folder;
+    handleRenameEnd();
+    const lib = library();
+    if (!created || !lib) return;
+    try {
+      await lib.deleteFolder(folder);
+    } catch (e) {
+      toast.error("Failed to delete", { description: (e as Error).message });
+    }
+  };
 
   /**
    * The panel's own keys, the ones its menu advertises. These commands are the
@@ -792,7 +824,8 @@ export function Assets() {
                       onContextSelect={() => handleItemContextMenu(folderKey(folder))}
                       onDragStart={(event) => handleItemDragStart(folderKey(folder), event)}
                       onRenameStart={() => setRenamingFolder(folder)}
-                      onRenameEnd={() => setRenamingFolder(null)}
+                      onRenameEnd={handleRenameEnd}
+                      onRenameCancel={() => void handleRenameCancel(folder)}
                       onOpen={() => openFolder(folder)}
                       onDelete={deleteSelection}
                     />
@@ -819,7 +852,7 @@ export function Assets() {
             </Show>
           </ContextMenuTrigger>
           <ContextMenuPortal>
-            <ContextMenuContent class="w-52">
+            <ContextMenuContent class="w-52" onCloseAutoFocus={handleMenuCloseAutoFocus}>
               <ContextMenuItem onSelect={handleImportAssets}>
                 Import assets
                 <ContextMenuShortcut>⌘I</ContextMenuShortcut>
