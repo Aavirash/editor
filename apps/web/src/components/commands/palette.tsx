@@ -146,7 +146,7 @@ function rank(commands: RegisteredCommand[], search: string): ListedSection[] {
 }
 
 const LIST_CLASS =
-  "max-h-[min(400px,60vh)] scroll-py-1 overflow-y-auto overflow-x-hidden px-3 py-1 [&_[cmdk-list-sizer]]:flex [&_[cmdk-list-sizer]]:flex-col [&_[cmdk-list-sizer]]:gap-2";
+  "max-h-[min(400px,60vh)] scroll-pt-1 scroll-pb-2.5 overflow-y-auto overflow-x-hidden px-3 pt-1 pb-2.5 [&_[cmdk-list-sizer]]:flex [&_[cmdk-list-sizer]]:flex-col [&_[cmdk-list-sizer]]:gap-2";
 
 const GROUP_CLASS =
   "[&_[cmdk-group-heading]]:flex [&_[cmdk-group-heading]]:h-8 [&_[cmdk-group-heading]]:items-center [&_[cmdk-group-heading]]:px-1 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:select-none";
