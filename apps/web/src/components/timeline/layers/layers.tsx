@@ -35,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipPortal, TooltipTrigger } from '@/components/ui/tooltip';
+import { CommandContextMenu, TIMELINE_HEADER_MENU } from '@/components/commands';
 import { DEFAULT_CLIP_HEIGHT, RULER_HEIGHT } from '@/engine/timeline';
 import { splitAtPlayhead } from '@/engine/split';
 import { useDerived, useEditor, useTimelineIndex } from '@/engine/hooks';
@@ -150,9 +151,10 @@ export function Layers() {
         style={{ 'grid-template-rows': `${RULER_HEIGHT}px 1fr` }}
         data-timeline-layers-container
       >
-        <div
+        <CommandContextMenu
+          layout={TIMELINE_HEADER_MENU}
           class="w-full z-10 flex flex-row gap-1 pl-2 pr-3 items-center text-muted-foreground select-none"
-          on:dblclick={handleHeaderDoubleClick}
+          onDblClick={handleHeaderDoubleClick}
         >
           <Tooltip placement="top">
             <TooltipTrigger<typeof Button>
@@ -271,7 +273,7 @@ export function Layers() {
           <span class="text-xs font-mono font-thin ml-auto select-none">
             {clock()}
           </span>
-        </div>
+        </CommandContextMenu>
         <div data-timeline-layers-viewport class="relative h-full z-0 overflow-hidden">
           <div
             data-timeline-layers

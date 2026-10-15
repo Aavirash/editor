@@ -52,9 +52,11 @@ export function ViewMenu() {
       <DropdownMenuGroup>
         <DropdownMenuItem onSelect={layout.toggleUI}>
           Toggle UI
+          <DropdownMenuShortcut>⌘\</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={layout.toggleTimeline}>
           Toggle timeline
+          <DropdownMenuShortcut>⌘J</DropdownMenuShortcut>
         </DropdownMenuItem>
       </DropdownMenuGroup>
     </>

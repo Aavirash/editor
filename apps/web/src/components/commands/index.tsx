@@ -22,7 +22,7 @@ import { WindowCommands } from "./window";
 
 export { CommandBar } from "./command-bar";
 export { CommandPalette } from "./palette";
-export { CANVAS_MENU, NodeContextMenu, TIMELINE_MENU } from "./node-menu";
+export { CANVAS_MENU, CommandContextMenu, NodeContextMenu, TIMELINE_HEADER_MENU, TIMELINE_MENU } from "./node-menu";
 export { ReloadWindowCommand } from "./reload-window";
 
 /**

@@ -33,7 +33,7 @@ export function HeaderActions(props: HeaderActionsProps) {
         >
           <Icon name="plus-add" />
         </TooltipTrigger>
-        <TooltipContent>New chat</TooltipContent>
+        <TooltipContent shortcut="⇧⌘L">New chat</TooltipContent>
       </Tooltip>
     </div>
   );

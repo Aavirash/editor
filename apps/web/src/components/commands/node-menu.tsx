@@ -56,7 +56,7 @@ export const CANVAS_MENU: NodeMenuLayout = {
     MEDIA,
     GENERATE,
   ],
-  empty: [["shortcut:paste", "shortcut:select-all"], ["toggle-ui", "open-chat", "actions"]],
+  empty: [["shortcut:paste", "shortcut:select-all"], ["toggle-ui", "toggle-timeline", "toggle-chat", "actions"]],
 };
 
 /**
@@ -76,8 +76,25 @@ export const TIMELINE_MENU: NodeMenuLayout = {
   empty: [["shortcut:paste"]],
 };
 
+/**
+ * The timeline header's: what its buttons do, and putting the timeline away
+ * (or bringing it back), which a double-click on it does too.
+ */
+export const TIMELINE_HEADER_MENU: string[][] = [
+  ["shortcut:toggle-playback", "shortcut:split"],
+  ["toggle-timeline"],
+];
+
 /** Whether `command` would run over the selection rather than ask for a target. */
 const offered = (command: RegisteredCommand) => (command.available?.() ?? true) && (command.ready?.() ?? true);
+
+/** `layout`'s commands that are on offer, sections left with none left out. */
+function resolve(commands: RegisteredCommand[], layout: string[][]): RegisteredCommand[][] {
+  const byId = new Map(commands.map((command) => [command.id, command]));
+  return layout
+    .map((ids) => ids.map((id) => byId.get(id)).filter((command) => command !== undefined).filter(offered))
+    .filter((section) => section.length > 0);
+}
 
 export type NodeContextMenuProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, "onContextMenu"> & {
   /** The nodes a right-click at `event` is on; empty over nothing. */
@@ -90,9 +107,8 @@ export type NodeContextMenuProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, "onC
 export function NodeContextMenu(props: NodeContextMenuProps) {
   const [local, rest] = splitProps(props, ["pick", "layout", "children"]);
   const world = useWorld();
-  const { commands, execute } = useCommands();
+  const { commands } = useCommands();
   const { nodes } = useSelection();
-  const [frozen, setFrozen] = createSignal<RegisteredCommand[][] | null>(null);
 
   const select = (event: MouseEvent) => {
     const editor = getDocumentEditor(world);
@@ -114,12 +130,53 @@ export function NodeContextMenu(props: NodeContextMenuProps) {
    * right-click just made shows up in it a frame after the menu opens.
    */
   const live = () => {
-    const byId = new Map(commands().map((command) => [command.id, command]));
     const layout = local.layout ?? CANVAS_MENU;
-    return (nodes().length ? layout.nodes : layout.empty)
-      .map((ids) => ids.map((id) => byId.get(id)).filter((command) => command !== undefined).filter(offered))
-      .filter((section) => section.length > 0);
+    return resolve(commands(), nodes().length ? layout.nodes : layout.empty);
   };
+
+  return (
+    <CommandMenu {...rest} sections={live} onContextMenu={select}>
+      {local.children}
+    </CommandMenu>
+  );
+}
+
+export type CommandContextMenuProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, "onContextMenu"> & {
+  /** What the menu lists, by command id, a rule between sections. */
+  layout: string[][];
+};
+
+/**
+ * A right-click menu of commands that work on no selection — a panel's
+ * header's, say. Unlike `NodeContextMenu`, the click leaves the selection be.
+ */
+export function CommandContextMenu(props: CommandContextMenuProps) {
+  const [local, rest] = splitProps(props, ["layout", "children"]);
+  const { commands } = useCommands();
+
+  const live = () => resolve(commands(), local.layout);
+
+  const prevent = (event: MouseEvent) => {
+    if (live().length === 0) event.preventDefault();
+  };
+
+  return (
+    <CommandMenu {...rest} sections={live} onContextMenu={prevent}>
+      {local.children}
+    </CommandMenu>
+  );
+}
+
+type CommandMenuProps = JSX.HTMLAttributes<HTMLDivElement> & {
+  /** What is on offer, followed while the menu is open. */
+  sections(): RegisteredCommand[][];
+  onContextMenu(event: MouseEvent): void;
+};
+
+function CommandMenu(props: CommandMenuProps) {
+  const [local, rest] = splitProps(props, ["sections", "children"]);
+  const { execute } = useCommands();
+  const [frozen, setFrozen] = createSignal<RegisteredCommand[][] | null>(null);
 
   /**
    * Holds the list as it stands until the menu is open again: a command run
@@ -127,14 +184,14 @@ export function NodeContextMenu(props: NodeContextMenuProps) {
    * pointer while it fades out.
    */
   const freeze = () => {
-    if (frozen() === null) setFrozen(live());
+    if (frozen() === null) setFrozen(local.sections());
   };
 
-  const sections = () => frozen() ?? live();
+  const sections = () => frozen() ?? local.sections();
 
   return (
     <ContextMenu onOpenChange={(open) => (open ? setFrozen(null) : freeze())}>
-      <ContextMenuTrigger {...rest} onContextMenu={select}>
+      <ContextMenuTrigger {...rest}>
         {local.children}
       </ContextMenuTrigger>
       <ContextMenuPortal>
