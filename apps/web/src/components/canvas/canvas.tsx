@@ -2,9 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { createEffect, on, onCleanup, onMount } from "solid-js";
 import { useWorld } from "@diffusionstudio/koota-solid";
 import { findSceneAt, screenToWorld, worldToLocal, Library, Root } from "@diffusionstudio/runtime";
-import { CameraController, EngineCanvas, nodesAt } from "@/engine";
+import { CameraController, EngineCanvas, nodesAt, panBy } from "@/engine";
+import { useLayout } from "@/context/layout";
 import { insertAsset } from "@/engine/insert-asset";
 import { droppedFiles, importFiles } from "@/engine/asset-actions";
 import { Toolbar } from "./toolbar";
@@ -18,6 +20,33 @@ import type { Asset } from "@diffusionstudio/assets";
 
 export function Canvas() {
   const world = useWorld();
+  const { uiVisible } = useLayout();
+  let container!: HTMLDivElement;
+
+  /**
+   * Where the canvas sits on screen, kept up as the panels around it change
+   * size (the left one animates between the sidebar's tabs).
+   */
+  let origin: DOMRect | null = null;
+  const observer = new ResizeObserver(() => (origin = container.getBoundingClientRect()));
+  onMount(() => observer.observe(container));
+  onCleanup(() => observer.disconnect());
+
+  /**
+   * Showing or hiding the panels moves the canvas's corner across the
+   * screen; the camera moves back by as much, so what is drawn stays where it
+   * was. The grid snaps rather than animates when the panels come and go, so
+   * the new place can be read straight away, ahead of the observer.
+   */
+  createEffect(on(uiVisible, () => {
+    const before = origin;
+    origin = container.getBoundingClientRect();
+    if (!before) return;
+
+    const dx = origin.left - before.left;
+    const dy = origin.top - before.top;
+    if (dx || dy) panBy(world, dx, dy);
+  }, { defer: true }));
 
   /**
    * Drops onto the canvas: library assets (dragged from the panel) land where
@@ -69,7 +98,7 @@ export function Canvas() {
   }
 
   return (
-    <div class="relative size-full bg-background">
+    <div ref={container} class="relative size-full bg-background">
       <div
         class="absolute inset-0"
         on:drop={handleDropEvent}

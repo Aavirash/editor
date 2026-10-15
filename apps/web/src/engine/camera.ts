@@ -14,6 +14,7 @@ import {
 	focusEntities,
 	getCameraMatrix,
 	getSelection,
+	panCamera,
 	setCameraZoom,
 	zoomCameraBy,
 } from '@diffusionstudio/runtime';
@@ -24,6 +25,12 @@ import type { World } from 'koota';
 
 function reportCamera(world: World): void {
 	getDocumentEditor(world).reportEdit(world.get(Root)!, 'camera', getCameraMatrix(world));
+}
+
+/** Scrolls the view by a delta in canvas CSS pixels: the content moves against it. */
+export function panBy(world: World, dx: number, dy: number): void {
+	panCamera(world, dx, dy);
+	reportCamera(world);
 }
 
 /** Zooms around the center of the viewport: above 1 in, below 1 out. */
