@@ -18,7 +18,7 @@ import { PromptInput } from "../genai/prompt-input";
 import { CommandBar } from "../commands";
 import { ObjectMaskBar } from "./object-mask-bar";
 import { ClipPathBar } from "./clip-path-bar";
-import { For, Match, Show, Switch, createEffect, createMemo, createSignal, on, onCleanup } from "solid-js";
+import { For, Match, Show, Switch, createEffect, createMemo, createSignal, on, onCleanup, onMount } from "solid-js";
 import { Tool, ToolType } from "@diffusionstudio/runtime";
 import { useWorld } from "@diffusionstudio/koota-solid";
 import { cancelClipPath, cancelObjectMask, clearClipPathTarget, useTool } from "@/engine";
@@ -27,6 +27,7 @@ import { useCommands } from "@/context/commands";
 import { TOOLBAR_SLOTS, useLayout } from "@/context/layout";
 import { TOOLBAR_SLOT_ANCHOR, TOOLBAR_SLOT_CLASS, isTopSlot } from "./toolbar-slot";
 import { cx } from "@/lib/cva";
+import { isInputTarget } from "@/utils";
 
 import type { ToolbarSlot } from "@/context/layout";
 
@@ -90,6 +91,21 @@ export function Toolbar() {
   const handleToolChange = (tool: ToolType) => {
     world.set(Tool, { value: tool });
   }
+
+  // G opens and closes the prompt box, as its button does. The box lives
+  // here rather than in the engine, so its key is bound here rather than in
+  // the engine's shortcut table.
+  const handleGenerateKey = (event: KeyboardEvent) => {
+    if (event.key.toLowerCase() !== "g" || event.repeat) return;
+    if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+    if (isInputTarget(event)) return;
+
+    event.preventDefault();
+    setPromptInputOpen(!promptInputOpen());
+  };
+
+  onMount(() => window.addEventListener("keydown", handleGenerateKey));
+  onCleanup(() => window.removeEventListener("keydown", handleGenerateKey));
 
   // Dragging the toolbar shows the other slots it can go to, the one nearest
   // the pointer drawn wide; the toolbar stays put until it is let go of, and
@@ -339,7 +355,7 @@ export function Toolbar() {
           >
             <Icon name="ai-generate" class="size-7" />
           </TooltipTrigger>
-          <TooltipContent>AI generate</TooltipContent>
+          <TooltipContent shortcut="G">AI generate</TooltipContent>
         </Tooltip>
         <Separator orientation="vertical" class="min-h-5" />
         <Tooltip>
