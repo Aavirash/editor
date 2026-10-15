@@ -2,14 +2,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { HitRegions, Tool, ToolType, Dragging, Hovering, isPointerInEntity, pointInQuad } from '@diffusionstudio/runtime';
+import { HitRegions, RenderSurface, Tool, ToolType, Dragging, Hovering, getSelection, isPointerInEntity, pointInQuad } from '@diffusionstudio/runtime';
 
 import { getEditHistory } from '../history';
 import { Keys, Pointer, PointerEvents } from '../traits';
 import { getToolCursor, updateCursor } from './cursor';
 import { handleCanvasInteraction, handleGeometryInteraction } from './interactions';
 
-import type { World } from 'koota';
+import type { Entity, World } from 'koota';
 import type { CursorType } from './cursor';
 import type { CanvasPointerEvent, DispatchedPointerEvent, HitRegion, PointerEventType } from '@diffusionstudio/runtime';
 
@@ -40,6 +40,32 @@ function hitTest(world: World, event: CanvasPointerEvent): HitRegion | null {
 
 	return null;
 };
+
+/**
+ * The nodes a right-click at `event` is on: the one under the pointer, the
+ * node a header or tool overlay belongs to, or the selection when it lands
+ * on the selection's box or handles. Empty over the bare stage. Tested
+ * against the regions the last frame drew, so it answers between ticks.
+ */
+export function nodesAt(world: World, event: MouseEvent): Entity[] {
+	const canvas = world.get(RenderSurface)?.canvas;
+	if (!(canvas instanceof HTMLCanvasElement)) return [];
+
+	const rect = canvas.getBoundingClientRect();
+	const resolution = world.get(RenderSurface)?.resolution ?? 1;
+	const region = hitTest(world, {
+		type: 'pointerdown',
+		clientX: (event.clientX - rect.left) * resolution,
+		clientY: (event.clientY - rect.top) * resolution,
+		button: event.button,
+	} as CanvasPointerEvent);
+
+	if (region === null) return [];
+	if (region.target.kind === 'entity') return [region.target.id];
+	if (region.target.entity) return [region.target.entity];
+	if (region.target.id === 'canvas') return [];
+	return getSelection(world);
+}
 
 function dispatch(
 	world: World,

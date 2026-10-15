@@ -17,12 +17,15 @@ import {
 } from "@/components/canvas/action-bar";
 
 export function RerunCommand() {
+  const { media } = useMediaSelection();
+
   useCommand({
     id: "rerun",
     title: "Rerun generation",
     group: "Generate",
     icon: "rerun",
     keywords: ["regenerate", "again", "retry"],
+    available: () => media().some((entry) => entry.asset?.job !== undefined),
     bar: RerunBar,
   });
 

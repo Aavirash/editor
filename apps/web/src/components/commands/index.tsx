@@ -20,6 +20,7 @@ import { UpscaleCommand } from "./upscale";
 
 export { CommandBar } from "./command-bar";
 export { CommandPalette } from "./palette";
+export { NodeContextMenu } from "./node-menu";
 export { ReloadWindowCommand } from "./reload-window";
 
 /**

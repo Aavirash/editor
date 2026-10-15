@@ -4,11 +4,11 @@
 
 import { useWorld } from "@diffusionstudio/koota-solid";
 import { findSceneAt, screenToWorld, worldToLocal, Library, Root } from "@diffusionstudio/runtime";
-import { CameraController, EngineCanvas } from "@/engine";
+import { CameraController, EngineCanvas, nodesAt } from "@/engine";
 import { insertAsset } from "@/engine/insert-asset";
 import { droppedFiles, importFiles } from "@/engine/asset-actions";
 import { Toolbar } from "./toolbar";
-import { CanvasCommands } from "@/components/commands";
+import { CanvasCommands, NodeContextMenu } from "@/components/commands";
 import { DesktopAppBanner } from "./desktop-app-banner";
 import { toast } from "somoto"
 import { SceneInitOverlay } from "./scene-init-overlay";
@@ -79,7 +79,9 @@ export function Canvas() {
         <CanvasCommands />
         <DesktopAppBanner />
         <SceneInitOverlay />
-        <EngineCanvas />
+        <NodeContextMenu class="size-full" pick={(event) => nodesAt(world, event)}>
+          <EngineCanvas />
+        </NodeContextMenu>
         <CameraController />
       </div>
     </div>

@@ -19,13 +19,20 @@ import {
 } from "@diffusionstudio/runtime";
 import { useCommand } from "@/context/commands";
 import {
+  copySelection,
+  cutSelection,
+  deleteSelection,
+  duplicateSelection,
+  getDocumentEditor,
   getEditHistory,
   groupSelection,
+  pasteSelection,
   redoEdit,
   restackSelection,
   seekBy,
   seekToSelectionEdge,
   seekToTimelineEdge,
+  selectAll,
   splitAtPlayhead,
   toggleSelectionHidden,
   undoEdit,
@@ -39,13 +46,14 @@ import {
 
 import type { Entity, World } from "koota";
 import type { Section } from "@/context/commands";
-import type { EditHistory } from "@/engine";
+import type { DocumentEditor, EditHistory } from "@/engine";
 
 /** What a shortcut needs to have something to work on. */
 type ShortcutState = {
   /** The selected nodes. */
   nodes: Entity[];
   history: EditHistory;
+  editor: DocumentEditor;
   scene: Entity | null;
 };
 
@@ -53,7 +61,7 @@ type Shortcut = {
   id: string;
   title: string;
   group: Section;
-  icon: string;
+  icon?: string;
   /** Its keys, one cap each. */
   keys: string[];
   keywords?: string[];
@@ -301,6 +309,58 @@ const SHORTCUTS: Shortcut[] = [
     run: redoEdit,
     available: ({ history }) => history.canRedo(),
   },
+  {
+    id: "copy",
+    title: "Copy",
+    group: "Edit",
+    keys: ["⌘", "C"],
+    keywords: ["clipboard"],
+    run: copySelection,
+    available: selection,
+  },
+  {
+    id: "cut",
+    title: "Cut",
+    group: "Edit",
+    keys: ["⌘", "X"],
+    keywords: ["clipboard"],
+    run: cutSelection,
+    available: selection,
+  },
+  {
+    id: "paste",
+    title: "Paste",
+    group: "Edit",
+    keys: ["⌘", "V"],
+    keywords: ["clipboard"],
+    run: pasteSelection,
+    available: ({ editor }) => editor.canPaste(),
+  },
+  {
+    id: "duplicate",
+    title: "Duplicate",
+    group: "Edit",
+    keys: ["⌘", "D"],
+    keywords: ["copy", "clone"],
+    run: duplicateSelection,
+    available: selection,
+  },
+  {
+    id: "delete",
+    title: "Delete",
+    group: "Edit",
+    keys: ["⌫"],
+    keywords: ["remove"],
+    run: deleteSelection,
+    available: selection,
+  },
+  {
+    id: "select-all",
+    title: "Select all",
+    group: "Edit",
+    keys: ["⌘", "A"],
+    run: selectAll,
+  },
 ];
 
 /** Every shortcut as a command, sharing one read of what they work on. */
@@ -309,8 +369,9 @@ export function ShortcutCommands() {
   const { nodes } = useSelection();
   const scene = useActiveScene();
   const history = getEditHistory(world);
+  const editor = getDocumentEditor(world);
 
-  const state = (): ShortcutState => ({ nodes: nodes(), history, scene: scene() });
+  const state = (): ShortcutState => ({ nodes: nodes(), history, editor, scene: scene() });
 
   return <For each={SHORTCUTS}>{(shortcut) => <ShortcutCommand shortcut={shortcut} state={state} />}</For>;
 }
