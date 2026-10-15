@@ -182,6 +182,8 @@ export function AssetFillPicker(props: AssetFillPickerProps) {
               onDragStart={(event) => event.dataTransfer?.setData(ASSET_DRAG_TYPE, asset.id)}
               onInsertAtStart={() => insertAssetsAtStart(world, [asset])}
               onInsertAtPlayhead={() => insertAssetAtPlayhead(world, asset)}
+              folders={[...(library()?.folders() ?? [])].sort()}
+              onMove={(folder) => library()?.move([asset], folder)}
               onDelete={() => void handleDeleteAsset(asset)}
             />
           )}

@@ -260,6 +260,22 @@ export function Assets() {
   const insertSelectionAtStart = () => insertAssetsAtStart(world, selectedAssets());
   const insertSelectionAtPlayhead = () => insertAssetsAtPlayhead(world, selectedAssets());
 
+  /** Moves the selection into a folder ('' = root), as a drop onto it would. */
+  const moveSelectionTo = (target: string) => {
+    const lib = library();
+    if (!lib) return;
+    const assets = selectedAssets();
+    if (assets.length) lib.move(assets, target);
+    for (const folder of assetSelection.folders()) {
+      if (folder === target || dirname(folder) === target) continue;
+      if (target.startsWith(`${folder}/`)) {
+        toast("Cannot move a folder into itself");
+      } else {
+        lib.moveFolder(folder, target);
+      }
+    }
+  };
+
   const deleteSelection = async () => {
     const lib = library();
     if (!lib) return;
@@ -793,6 +809,8 @@ export function Assets() {
                       onDragStart={(event) => handleItemDragStart(assetKey(asset.id), event)}
                       onInsertAtStart={insertSelectionAtStart}
                       onInsertAtPlayhead={insertSelectionAtPlayhead}
+                      folders={allFolders()}
+                      onMove={moveSelectionTo}
                       onDelete={deleteSelection}
                     />
                   )}

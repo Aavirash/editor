@@ -2,8 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { createSignal, onMount, onCleanup, Show, createMemo } from "solid-js";
-import { assetName } from "@diffusionstudio/assets";
+import { createSignal, onMount, onCleanup, For, Show, createMemo } from "solid-js";
+import { assetFolder, assetName } from "@diffusionstudio/assets";
 import { replaceAssetSource, saveAssetAs } from "@/engine/asset-actions";
 import {
   ContextMenu,
@@ -37,6 +37,10 @@ export type LazyAssetItemProps = {
   onInsertAtStart(): void;
   /** Inserts the selection at the playhead. */
   onInsertAtPlayhead(): void;
+  /** Every folder in the library, offered as move targets. */
+  folders: string[];
+  /** Moves the selection into a folder ('' = root). */
+  onMove(folder: string): void;
   /** Deletes the selection. */
   onDelete(): void;
 };
@@ -172,6 +176,31 @@ export function LazyAssetItem(props: LazyAssetItemProps) {
               </ContextMenuSubContent>
             </ContextMenuPortal>
           </ContextMenuSub>
+          <Show when={props.folders.length > 0}>
+            <ContextMenuSub>
+              <ContextMenuSubTrigger>Move to...</ContextMenuSubTrigger>
+              <ContextMenuPortal>
+                <ContextMenuSubContent class="w-[220px]">
+                  <ContextMenuGroup>
+                    <ContextMenuItem
+                      disabled={!props.multiple && assetFolder(props.asset) === ""}
+                      onSelect={() => props.onMove("")}>
+                      All assets
+                    </ContextMenuItem>
+                    <For each={props.folders}>
+                      {(folder) => (
+                        <ContextMenuItem
+                          disabled={!props.multiple && assetFolder(props.asset) === folder}
+                          onSelect={() => props.onMove(folder)}>
+                          <MiddleEllipsis text={folder} title={folder} class="min-w-0 flex-1" />
+                        </ContextMenuItem>
+                      )}
+                    </For>
+                  </ContextMenuGroup>
+                </ContextMenuSubContent>
+              </ContextMenuPortal>
+            </ContextMenuSub>
+          </Show>
           <Show when={!props.multiple}>
             <ContextMenuSeparator />
             <ContextMenuGroup>
