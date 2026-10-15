@@ -3,20 +3,24 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { useWorld } from "@diffusionstudio/koota-solid";
+import { Scene } from "@diffusionstudio/runtime";
 import { useProject } from "@/context/project";
 import { generateCaptions } from "@/engine/generate";
-import { useActiveScene } from "@/engine/hooks";
+import { useActiveScene, useSelection } from "@/engine/hooks";
 
-/** Captions for the active scene, the one being edited: selecting a scene makes it active. */
+/** Captions for the selected scene, or the active one, the one being edited, when none is selected. */
 export function useAutoCaptions() {
   const world = useWorld();
   const project = useProject();
-  const scene = useActiveScene();
+  const { nodes } = useSelection();
+  const active = useActiveScene();
+
+  const scene = () => nodes().find((node) => node.has(Scene)) ?? active();
 
   const generate = () => {
-    const active = scene();
-    if (active) {
-      generateCaptions(world, active, project.dir());
+    const target = scene();
+    if (target) {
+      generateCaptions(world, target, project.dir());
     }
   };
 
