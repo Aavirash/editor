@@ -13,6 +13,8 @@ import { cx } from "@/lib/cva"
 
 export const ContextMenuPortal = ContextMenuPrimitive.Portal
 
+/** Matches the horizontal offset dropdown submenus use. */
+const SUB_GUTTER = 10
 /** Lifts a submenu by its padding + border so its first item lines up with the trigger. */
 const SUB_SHIFT = -9
 const ContextMenuContentDisabledContext = createContext<Accessor<boolean>>()
@@ -44,8 +46,14 @@ export type ContextMenuGroupProps<T extends ValidComponent = "div"> =
 export const ContextMenuGroup = <T extends ValidComponent = "div">(
   props: ContextMenuGroupProps<T>,
 ) => {
+  const [, rest] = splitProps(props as ContextMenuGroupProps, ["class"])
+
   return (
-    <ContextMenuPrimitive.Group data-slot="context-menu-group" {...props} />
+    <ContextMenuPrimitive.Group
+      data-slot="context-menu-group"
+      class={cx("flex flex-col gap-0 w-full", props.class)}
+      {...rest}
+    />
   )
 }
 
@@ -55,7 +63,7 @@ export type ContextMenuSubProps = ComponentProps<
 
 export const ContextMenuSub = (props: ContextMenuSubProps) => {
   const merge = mergeProps<ContextMenuSubProps[]>(
-    { shift: SUB_SHIFT },
+    { gutter: SUB_GUTTER, shift: SUB_SHIFT },
     props,
   )
 
@@ -107,16 +115,7 @@ export const ContextMenuSubTrigger = <T extends ValidComponent = "div">(
         {local.children}
       </span>
       <span class="h-7 w-6 shrink-0 flex items-center justify-center text-muted-foreground">
-        <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24">
-          <path
-            fill="none"
-            stroke="currentColor"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="m9 18l6-6l-6-6"
-          />
-        </svg>
+        <Icon name="chevron-right" />
       </span>
     </ContextMenuPrimitive.SubTrigger>
   )
@@ -197,7 +196,9 @@ export const ContextMenuItem = <T extends ValidComponent = "div">(
       data-variant={local.variant}
       disabled={local.disabled || isContentDisabled()}
       class={cx(
-        "group data-[highlighted]:bg-primary data-[highlighted]:text-primary-foreground data-[disabled]:data-[highlighted]:bg-transparent data-[disabled]:data-[highlighted]:text-muted-foreground data-[variant=destructive]:text-destructive data-[variant=destructive]:data-[highlighted]:bg-destructive/10 dark:data-[variant=destructive]:data-[highlighted]:bg-destructive/20 data-[variant=destructive]:data-[highlighted]:text-destructive data-[variant=destructive]:*:[svg]:!text-destructive [&_svg:not([class*='text-'])]:text-muted-foreground relative flex cursor-default items-center gap-1 rounded-md bg-popover px-2 py-0 text-xs outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 h-7 w-full data-[highlighted]:[&_svg]:text-primary-foreground",
+        "group [&_svg:not([class*='text-'])]:text-muted-foreground relative flex cursor-default items-center gap-1 rounded-md bg-popover px-2 py-0 text-xs outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 h-7 min-h-7 w-full",
+        "data-[highlighted]:bg-primary data-[highlighted]:text-primary-foreground data-[highlighted]:[&_svg]:text-primary-foreground data-[disabled]:data-[highlighted]:bg-transparent data-[disabled]:data-[highlighted]:text-muted-foreground",
+        "data-[variant=destructive]:text-destructive data-[variant=destructive]:data-[highlighted]:bg-destructive/10 dark:data-[variant=destructive]:data-[highlighted]:bg-destructive/20 data-[variant=destructive]:data-[highlighted]:text-destructive data-[variant=destructive]:*:[svg]:!text-destructive",
         local.class,
       )}
       {...rest}
@@ -256,28 +257,14 @@ export const ContextMenuRadioItem = <T extends ValidComponent = "div">(
       data-slot="context-menu-radio-item"
       disabled={local.disabled || isContentDisabled()}
       class={cx(
-        "group data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "group data-[highlighted]:bg-primary data-[highlighted]:text-primary-foreground relative flex cursor-default items-center gap-1 rounded-md bg-popover pr-2 pl-7 py-0 text-xs outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-7 w-full",
         local.class,
       )}
       {...rest}
     >
-      <span class="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
-        <ContextMenuPrimitive.ItemIndicator
-          as="svg"
-          xmlns="http://www.w3.org/2000/svg"
-          class="size-2"
-          viewBox="0 0 24 24"
-        >
-          <circle
-            cx="12"
-            cy="12"
-            r="10"
-            fill="currentColor"
-            stroke="currentColor"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-          />
+      <span class="pointer-events-none absolute left-0.5 flex size-6 items-center justify-center">
+        <ContextMenuPrimitive.ItemIndicator>
+          <Icon name="confirm-check" class="text-foreground group-data-[highlighted]:text-primary-foreground" />
         </ContextMenuPrimitive.ItemIndicator>
       </span>
       {local.children}
@@ -304,7 +291,7 @@ export const ContextMenuGroupLabel = <T extends ValidComponent = "span">(
       data-slot="context-menu-group-label"
       data-inset={props.inset}
       class={cx(
-        "text-foreground my-1.5 px-2 text-sm font-450 data-[inset]:pl-8",
+        "text-muted-foreground my-1.5 px-2 text-xs font-normal data-[inset]:pl-8",
         props.class,
       )}
       {...rest}
@@ -364,7 +351,7 @@ export const ContextMenuShortcut = (props: ContextMenuShortcutProps) => {
     <span
       data-slot="context-menu-shortcut"
       class={cx(
-        "ml-auto min-w-5 text-right text-xxs text-muted-foreground group-[[data-highlighted]]:text-[inherit] group-[[data-expanded]]:text-[inherit]",
+        "text-muted-foreground ml-auto text-xs tracking-widest group-[[data-highlighted]]:text-[inherit] group-[[data-expanded]]:text-[inherit]",
         props.class,
       )}
       {...rest}
