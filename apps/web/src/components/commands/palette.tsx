@@ -151,10 +151,10 @@ const LIST_CLASS =
 const GROUP_CLASS =
   "[&_[cmdk-group-heading]]:flex [&_[cmdk-group-heading]]:h-8 [&_[cmdk-group-heading]]:items-center [&_[cmdk-group-heading]]:px-1 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:select-none";
 
-const ITEM_CLASS = "group flex h-8 cursor-default items-center text-xs text-foreground outline-hidden select-none";
+const ITEM_CLASS = "group flex h-9 cursor-default items-center text-xs text-foreground outline-hidden select-none";
 
-/** The highlight is a row inset in the item, as tall as a menu item. */
-const ROW_CLASS = "flex h-7 min-w-0 flex-1 items-center gap-1 rounded-md pr-1 group-data-[selected=true]:bg-accent";
+/** The highlight is a row inset in the item, 2px short of it top and bottom. */
+const ROW_CLASS = "flex h-8 min-w-0 flex-1 items-center gap-1 rounded-md pr-1 group-data-[selected=true]:bg-accent";
 
 type SearchRowProps = {
   value: string;
