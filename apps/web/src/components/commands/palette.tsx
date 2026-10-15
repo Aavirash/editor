@@ -6,7 +6,6 @@ import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-j
 import { Dialog } from "@kobalte/core/dialog";
 import { Command as CommandPrimitive, defaultFilter } from "cmdk-solid";
 import { Icon } from "@/components/ui/icon";
-import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { SECTIONS, useCommands } from "@/context/commands";
 
 import type { RegisteredCommand } from "@/context/commands";
@@ -19,6 +18,9 @@ const offered = (command: RegisteredCommand) => command.available?.() ?? true;
  * match scores well under this, a word or prefix or initials well over.
  */
 const MIN_SCORE = 0.05;
+
+/** How many of the commands last carried out the palette lists over the rest. */
+const RECENTS_LISTED = 4;
 
 /**
  * The command palette, on ⌘K: the commands on offer, by section, found by
@@ -55,7 +57,7 @@ export function CommandPalette() {
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-50 bg-overlay-soft data-[expanded]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[expanded]:fade-in-0" />
         <Dialog.Content
-          class="fixed top-[20vh] left-1/2 z-50 w-full max-w-[calc(100%-2rem)] sm:max-w-180 -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground outline-none shadow-[0px_0px_1px_2px_rgba(0,0,0,0.12),0px_4px_12px_8px_rgba(0,0,0,0.12),0px_12px_16px_0px_rgba(0,0,0,0.16)] data-[expanded]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[expanded]:fade-in-0 data-[closed]:zoom-out-[0.98] data-[expanded]:zoom-in-[0.98] duration-100"
+          class="fixed top-[20vh] left-1/2 z-50 w-full max-w-[calc(100%-2rem)] sm:max-w-xl -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground outline-none shadow-[0px_12px_24px_0px_rgba(0,0,0,0.24)] data-[expanded]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[expanded]:fade-in-0 data-[closed]:zoom-out-[0.98] data-[expanded]:zoom-in-[0.98] duration-100"
           onCloseAutoFocus={(event: Event) => {
             if (picked) event.preventDefault();
             picked = false;
@@ -69,7 +71,12 @@ export function CommandPalette() {
   );
 }
 
-type ListedSection = { name: string; commands: RegisteredCommand[] };
+type ListedSection = {
+  name: string;
+  commands: RegisteredCommand[];
+  /** Tells its items from the same commands listed in another section. */
+  key?: string;
+};
 
 /**
  * The commands on offer that match `search`, in sections. Without a search,
@@ -107,28 +114,34 @@ function PaletteContent(props: { onPick(command: RegisteredCommand): void }) {
   const commands = useCommands();
   const [search, setSearch] = createSignal("");
 
-  const sections = createMemo(() => rank(commands.commands(), search()));
+  const sections = createMemo((): ListedSection[] => {
+    const listed = rank(commands.commands(), search());
+    if (search().trim()) return listed;
+
+    const recent = commands
+      .recents()
+      .map((id) => commands.commands().find((command) => command.id === id && offered(command)))
+      .filter((command) => command !== undefined)
+      .slice(0, RECENTS_LISTED);
+    return recent.length ? [{ name: "Recents", commands: recent, key: "recent" }, ...listed] : listed;
+  });
 
   return (
     <CommandPrimitive label="Commands" loop shouldFilter={false} class="flex flex-col">
-      {/* Inset like the items below, so the icon sits over theirs and the text over their titles. */}
-      <div class="mx-2 flex h-12 shrink-0 items-center gap-1.5 border-b border-border px-1.5">
-        <Icon name="search" class="text-muted-foreground" />
-        <CommandPrimitive.Input
-          value={search()}
-          onValueChange={setSearch}
-          placeholder="Type a command or search..."
-          class="h-full min-w-0 flex-1 bg-transparent text-sm outline-hidden placeholder:text-muted-foreground"
-        />
-        {/* Enter runs the highlighted command; with nothing listed it does nothing. */}
-        <Show when={sections().length > 0}>
-          <span class="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground select-none">
-            Run
-            <Kbd>↵</Kbd>
+      <div class="flex h-11 shrink-0 px-2">
+        <div class="flex min-w-0 flex-1 items-center border-b border-border">
+          <span class="flex size-7 shrink-0 items-center justify-center">
+            <Icon name="search" class="text-muted-foreground" />
           </span>
-        </Show>
+          <CommandPrimitive.Input
+            value={search()}
+            onValueChange={setSearch}
+            placeholder="Search or type a command"
+            class="h-full min-w-0 flex-1 bg-transparent text-xs text-foreground outline-hidden placeholder:text-muted-foreground"
+          />
+        </div>
       </div>
-      <CommandPrimitive.List class="max-h-[min(400px,60vh)] scroll-py-2 overflow-y-auto overflow-x-hidden px-2 pt-1 pb-2">
+      <CommandPrimitive.List class="max-h-[min(400px,60vh)] scroll-py-1 overflow-y-auto overflow-x-hidden px-3 py-1 [&_[cmdk-list-sizer]]:flex [&_[cmdk-list-sizer]]:flex-col [&_[cmdk-list-sizer]]:gap-2">
         <CommandPrimitive.Empty class="py-6 text-center text-xs text-muted-foreground">
           No commands found
         </CommandPrimitive.Empty>
@@ -136,26 +149,24 @@ function PaletteContent(props: { onPick(command: RegisteredCommand): void }) {
           {(section) => (
             <CommandPrimitive.Group
               heading={section.name}
-              class="[&_[cmdk-group-heading]]:flex [&_[cmdk-group-heading]]:h-8 [&_[cmdk-group-heading]]:items-center [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-muted-foreground"
+              class="[&_[cmdk-group-heading]]:flex [&_[cmdk-group-heading]]:h-8 [&_[cmdk-group-heading]]:items-center [&_[cmdk-group-heading]]:px-1 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:select-none"
             >
               <For each={section.commands}>
                 {(command) => (
                   <CommandPrimitive.Item
-                    value={command.id}
+                    value={section.key ? `${section.key}:${command.id}` : command.id}
                     onSelect={() => props.onPick(command)}
-                    class="flex h-10 cursor-default items-center gap-1.5 rounded-lg px-1.5 text-sm text-foreground outline-hidden select-none data-[selected=true]:bg-input [&_svg]:text-muted-foreground data-[selected=true]:[&_svg]:text-foreground"
+                    class="group flex h-8 cursor-default items-center text-xs text-foreground outline-hidden select-none"
                   >
-                    <Show when={command.icon} fallback={<span class="size-[25px] shrink-0" />}>
-                      {(icon) => <Icon name={icon()} />}
-                    </Show>
-                    <span class="flex-1 truncate">{command.title}</span>
-                    <Show when={command.shortcut}>
-                      {(keys) => (
-                        <KbdGroup class="pr-1">
-                          <For each={keys()}>{(key) => <Kbd>{key}</Kbd>}</For>
-                        </KbdGroup>
-                      )}
-                    </Show>
+                    <span class="flex h-7 min-w-0 flex-1 items-center gap-1 rounded-md pr-1 group-data-[selected=true]:bg-accent [&_svg]:text-muted-foreground group-data-[selected=true]:[&_svg]:text-foreground">
+                      <span class="flex size-7 shrink-0 items-center justify-center">
+                        <Show when={command.icon}>{(icon) => <Icon name={icon()} />}</Show>
+                      </span>
+                      <span class="flex-1 truncate">{command.title}</span>
+                      <Show when={command.shortcut}>
+                        {(keys) => <span class="shrink-0 px-2 text-xxs text-muted-foreground">{keys().join("")}</span>}
+                      </Show>
+                    </span>
                   </CommandPrimitive.Item>
                 )}
               </For>

@@ -8,6 +8,8 @@
 // up, and its handlers and its bar see that component's context.
 
 import { createContext, createSignal, getOwner, onCleanup, useContext } from "solid-js";
+import { store } from "@/init";
+import { createStoredSignal } from "@/lib/store";
 
 import type { Accessor, Component, JSX, Owner } from "solid-js";
 
@@ -19,6 +21,13 @@ import type { Accessor, Component, JSX, Owner } from "solid-js";
 export const SECTIONS = ["Media", "Generate", "Assets", "Export", "Timeline", "Object", "Tools", "Edit", "Window"] as const;
 
 export type Section = (typeof SECTIONS)[number];
+
+/**
+ * How many of the commands last carried out are remembered, most recent
+ * first. More than the palette lists, so the ones not on offer right now
+ * leave room for older ones.
+ */
+const RECENTS_KEPT = 6;
 
 type CommandAction =
   | {
@@ -74,6 +83,8 @@ type CommandsContextValue = {
   commands: Accessor<RegisteredCommand[]>;
   paletteOpen: Accessor<boolean>;
   setPaletteOpen(open: boolean): void;
+  /** The ids of the commands last carried out, most recent first; kept across sessions. */
+  recents: Accessor<string[]>;
   /** The command whose bar is up. */
   active: Accessor<RegisteredCommand | null>;
   /** Carries `command` out: runs it, or puts its bar up. */
@@ -89,9 +100,11 @@ export function CommandsProvider(props: { children: JSX.Element }) {
   const [commands, setCommands] = createSignal<RegisteredCommand[]>([]);
   const [paletteOpen, setPaletteOpen] = createSignal(false);
   const [active, setActive] = createSignal<RegisteredCommand | null>(null);
+  const [recents, setRecents] = createStoredSignal(store.define<string[]>("commands.recents", []));
 
   const execute = (command: RegisteredCommand) => {
     setPaletteOpen(false);
+    setRecents([command.id, ...recents().filter((id) => id !== command.id)].slice(0, RECENTS_KEPT));
     if (!command.bar || command.ready?.()) {
       command.run?.();
     } else {
@@ -111,7 +124,7 @@ export function CommandsProvider(props: { children: JSX.Element }) {
 
   return (
     <CommandsContext.Provider
-      value={{ commands, paletteOpen, setPaletteOpen, active, execute, close: () => setActive(null), register }}
+      value={{ commands, paletteOpen, setPaletteOpen, recents, active, execute, close: () => setActive(null), register }}
     >
       {props.children}
     </CommandsContext.Provider>
