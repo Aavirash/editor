@@ -151,7 +151,7 @@ export async function downloadObject(source: Blob, name?: string): Promise<void>
   a.remove();
 }
 
-export function isInputTarget(e: KeyboardEvent) {
+export function isInputTarget(e: Event) {
   const target = e.target as HTMLElement;
   return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 }

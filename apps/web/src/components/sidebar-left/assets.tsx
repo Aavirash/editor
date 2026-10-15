@@ -40,7 +40,8 @@ import { LazyAssetItem } from "./asset-item";
 import { FolderItem, handleFolderDrop, isAssetOrFolderDrag, ASSET_DRAG_TYPE, FOLDER_DRAG_TYPE } from "./folder-item";
 import { useLibrary } from "@/engine/library";
 import { useAssetSelection } from "@/engine/hooks";
-import { droppedFiles, importFiles, insertAssetsAtPlayhead, insertAssetsAtStart, pickAndImport } from "@/engine/asset-actions";
+import { droppedFiles, importClipboard, importFiles, insertAssetsAtPlayhead, insertAssetsAtStart, pickAndImport } from "@/engine/asset-actions";
+import { clipboardHasMedia, hasMedia, pastedMedia, readClipboardMedia } from "@/lib/clipboard";
 import { isInputTarget } from "@/utils";
 import { useCommand } from "@/context/commands";
 
@@ -330,6 +331,25 @@ export function Assets() {
 
   const handleImportAssets = () => withLibrary(async (lib) => selectImported(await pickAndImport(lib, currentFolder())));
 
+  /** Media copied in another app, into the folder in view: from the menu. */
+  const handlePaste = () => withLibrary(async (lib) => {
+    selectImported(await importClipboard(lib, await readClipboardMedia(), currentFolder()));
+  });
+
+  /**
+   * ⌘V with the panel in focus. Without media copied in another app, the
+   * paste goes on to the stage, as it would with the panel out of focus.
+   */
+  const handlePasteEvent = (event: ClipboardEvent) => {
+    if (isInputTarget(event)) return;
+    const media = pastedMedia(event);
+    const lib = library();
+    if (!hasMedia(media) || !lib) return;
+    event.preventDefault();
+    event.stopPropagation();
+    importClipboard(lib, media, currentFolder()).then(selectImported);
+  };
+
   const handleDrop = async (event: DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -557,6 +577,7 @@ export function Assets() {
       tabIndex={0}
       ref={root}
       onKeyDown={handleKeyDown}
+      on:paste={handlePasteEvent}
     >
       <div class="h-12 shrink-0 flex items-center gap-2 px-4 border-y border-border [[data-platform=win32]_&]:border-t-0">
         <div class="flex-1 min-w-0 flex items-center">
@@ -787,6 +808,10 @@ export function Assets() {
               </ContextMenuItem>
               <ContextMenuItem onSelect={() => openPromptInput(restoreConfig("IMAGE"))}>
                 Generate with AI
+              </ContextMenuItem>
+              <ContextMenuItem disabled={!clipboardHasMedia()} onSelect={handlePaste}>
+                Paste
+                <ContextMenuShortcut>⌘V</ContextMenuShortcut>
               </ContextMenuItem>
               <ContextMenuSeparator />
               <ContextMenuItem onSelect={handleCreateFolder}>

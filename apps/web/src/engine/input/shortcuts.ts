@@ -27,6 +27,7 @@ import {
 	getSelection,
 	isGroupLike,
 	isSequence,
+	Library,
 	setPlayhead,
 	shuttlePlayback,
 	stopPlayback,
@@ -35,6 +36,8 @@ import {
 } from '@diffusionstudio/runtime';
 import { Not, Or } from 'koota';
 
+import { claimClipboard, hasMedia, readClipboardMedia } from '@/lib/clipboard';
+import { pasteClipboardMedia } from '../asset-actions';
 import { zoomBy, zoomTo, zoomToFit, zoomToSelection } from '../camera';
 import { applyClipPaths, cancelClipPath } from '../clip-path';
 import { getDocumentEditor } from '../editor';
@@ -47,6 +50,7 @@ import { splitAtPlayhead } from '../split';
 import { Keys, MODIFIER_KEYS, ObjectMaskTool, Pointer } from '../traits';
 import { editTransform } from './interactions';
 
+import type { ClipboardMedia } from '@/lib/clipboard';
 import type { TransformWrite } from './interactions';
 import type { CameraMatrix } from '@diffusionstudio/runtime';
 import type { Entity, World } from 'koota';
@@ -89,6 +93,7 @@ export function copySelection(world: World): void {
 
 	if (selected.length) {
 		getDocumentEditor(world).copy(selected);
+		claimClipboard();
 	}
 }
 
@@ -99,30 +104,52 @@ export function cutSelection(world: World): void {
 }
 
 /**
+ * Pastes what the clipboard holds, from a menu or the palette: see
+ * `pasteInto`. ⌘V pastes from its paste event instead (see the engine).
+ */
+export async function pasteSelection(world: World): Promise<void> {
+	await pasteInto(world, await readClipboardMedia());
+}
+
+/**
  * Pastes where the selection points: into a selected container (a scene or
  * group, on top of its children), on top of a selected leaf in that leaf's
  * parent, or, with nothing selected, into the active scene. The editor keeps
  * a paste out of the sequence it was copied from.
+ *
+ * `media` copied in another app since the editor's last copy (a screenshot,
+ * files from the Finder) is pasted instead: imported into the library, then
+ * inserted into the same parent, or a new scene when there is none.
  */
-export function pasteSelection(world: World): void {
-	const editor = getDocumentEditor(world);
+export async function pasteInto(world: World, media: ClipboardMedia): Promise<void> {
 	const [selected] = world.query(Selected);
 
 	if (selected === undefined) {
-		const active = getActiveEntity(world);
-		if (active) editor.paste(active);
+		const active = getActiveEntity(world) ?? undefined;
+		if (hasMedia(media)) await pasteMedia(world, media, active);
+		else if (active) getDocumentEditor(world).paste(active);
 		return;
 	}
 
 	if (isGroupLike(selected)) {
-		editor.paste(selected);
+		if (hasMedia(media)) await pasteMedia(world, media, selected);
+		else getDocumentEditor(world).paste(selected);
 		return;
 	}
 
 	const parent = getParentEntity(selected);
 	if (parent === null) return;
+	if (hasMedia(media)) {
+		await pasteMedia(world, media, parent);
+		return;
+	}
 	const siblings = getEntityChildren(world, parent);
-	editor.paste(parent, siblings[siblings.indexOf(selected) + 1]);
+	getDocumentEditor(world).paste(parent, siblings[siblings.indexOf(selected) + 1]);
+}
+
+async function pasteMedia(world: World, media: ClipboardMedia, parent: Entity | undefined): Promise<void> {
+	const library = world.get(Library);
+	if (library) await pasteClipboardMedia(world, library, media, parent);
 }
 
 const NUDGE = 1;
@@ -514,7 +541,6 @@ const PRESSED_SHORTCUTS: readonly Shortcut[] = [
 	{ keys: ['enter', 'mod', 'alt', 'shift'], action: unwrapSequenceSelection },
 	{ keys: ['b', 'mod'], action: splitAtPlayhead },
 	{ keys: ['c', 'mod'], action: copySelection },
-	{ keys: ['v', 'mod'], action: pasteSelection },
 	{ keys: ['x', 'mod'], action: cutSelection },
 	{ keys: ['h', 'mod', 'shift'], action: toggleSelectionHidden },
 	{ keys: ['a', 'mod'], action: selectAll },

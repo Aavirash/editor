@@ -107,9 +107,9 @@ export function Canvas() {
         <Toolbar />
         <CanvasCommands />
         <DesktopAppBanner />
-        <SceneInitOverlay />
         <NodeContextMenu class="size-full" pick={(event) => nodesAt(world, event)}>
           <EngineCanvas />
+          <SceneInitOverlay />
         </NodeContextMenu>
         <CameraController />
       </div>

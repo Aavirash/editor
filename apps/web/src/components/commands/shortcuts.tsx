@@ -18,6 +18,7 @@ import {
   togglePlayback,
 } from "@diffusionstudio/runtime";
 import { useCommand } from "@/context/commands";
+import { clipboardHasMedia } from "@/lib/clipboard";
 import {
   copySelection,
   cutSelection,
@@ -337,7 +338,7 @@ const SHORTCUTS: Shortcut[] = [
     keys: ["⌘", "V"],
     keywords: ["clipboard"],
     run: pasteSelection,
-    available: ({ editor }) => editor.canPaste(),
+    available: ({ editor }) => editor.canPaste() || clipboardHasMedia(),
   },
   {
     id: "duplicate",

@@ -9,7 +9,8 @@ import { AssetSelection, DrawTool, GradientTool, Hud, Keys, MODIFIER_KEYS, Objec
 import { inputSystem } from './input/input-system';
 import { clearClipFrames, clearClipPeaks, clearMedia, clearPeaks, timelineSystem, TimelineSurface } from './timeline';
 import { clearObjectTrackOf, clearObjectTracks } from './object-mask';
-import { shortcutSystem } from './input/shortcuts';
+import { pasteInto, shortcutSystem } from './input/shortcuts';
+import { pastedMedia } from '@/lib/clipboard';
 
 import type { RuntimeWorld } from '@diffusionstudio/runtime';
 import type { CanvasPointerEvent, PointerEventType } from '@diffusionstudio/runtime';
@@ -133,7 +134,27 @@ class Engine {
 			if (isMod) keys.pressed.add('mod');
 		}
 
+		// ⌘V goes on to the browser
+		if (key === 'v' && (event.metaKey || event.ctrlKey)) return;
+
 		event.preventDefault();
+	}
+
+	/**
+	 * The paste ⌘V makes, with what it carries read while the event lasts.
+	 * Pastes into text fields belong to the field, and so do those a
+	 * composer took for itself.
+	 */
+	private readonly onPaste = (event: ClipboardEvent) => {
+		if (
+			event.defaultPrevented
+			|| event.target instanceof HTMLInputElement
+			|| event.target instanceof HTMLTextAreaElement
+			|| (event.target instanceof HTMLElement && event.target.isContentEditable)
+		) return;
+
+		event.preventDefault();
+		pasteInto(this.world, pastedMedia(event));
 	}
 
 	private readonly onKeyUp = (event: KeyboardEvent) => {
@@ -253,6 +274,7 @@ class Engine {
 		window.addEventListener('pointercancel', this.onPointerUp);
 		window.addEventListener('keydown', this.onKeyDown);
 		window.addEventListener('keyup', this.onKeyUp);
+		window.addEventListener('paste', this.onPaste);
 		window.addEventListener('blur', this.onBlur);
 
 		this.resizeObserver.observe(canvas.parentElement!);
@@ -305,6 +327,7 @@ class Engine {
 		window.removeEventListener('pointercancel', this.onPointerUp);
 		window.removeEventListener('keydown', this.onKeyDown);
 		window.removeEventListener('keyup', this.onKeyUp);
+		window.removeEventListener('paste', this.onPaste);
 		window.removeEventListener('blur', this.onBlur);
 		this.resizeObserver.disconnect();
 	}
