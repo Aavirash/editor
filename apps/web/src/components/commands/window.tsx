@@ -85,6 +85,7 @@ export function WindowCommands() {
     icon: "plus-add",
     keywords: ["new thread", "conversation", "agent", "assistant", "claude"],
     shortcut: ["⇧", "⌘", "L"],
+    palette: false,
     run: newChat,
   });
 

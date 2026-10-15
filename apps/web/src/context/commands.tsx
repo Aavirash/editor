@@ -113,7 +113,7 @@ export type Command = CommandAction & {
   available?(): boolean;
   /**
    * False keeps it out of the palette and its recents, for a command only a
-   * menu lists: the one that opens the palette itself.
+   * menu or shortcut reaches, like the one that opens the palette itself.
    */
   palette?: false;
 };
