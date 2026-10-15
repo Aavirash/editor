@@ -11,7 +11,7 @@ import { SECTIONS, useCommands } from "@/context/commands";
 
 import type { LayerSection, LayeredCommand, RegisteredCommand } from "@/context/commands";
 
-const offered = (command: RegisteredCommand) => command.available?.() ?? true;
+const offered = (command: RegisteredCommand) => command.palette !== false && (command.available?.() ?? true);
 
 /**
  * The least score a match needs to be listed. cmdk matches letters anywhere

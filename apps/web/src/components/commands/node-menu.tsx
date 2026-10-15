@@ -56,7 +56,7 @@ export const CANVAS_MENU: NodeMenuLayout = {
     MEDIA,
     GENERATE,
   ],
-  empty: [["shortcut:paste", "shortcut:select-all"]],
+  empty: [["shortcut:paste", "shortcut:select-all"], ["toggle-ui", "open-chat", "actions"]],
 };
 
 /**

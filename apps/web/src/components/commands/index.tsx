@@ -18,6 +18,7 @@ import { ReuseSettingsCommand } from "./reuse-settings";
 import { ShortcutCommands } from "./shortcuts";
 import { ToolCommand } from "./tool";
 import { UpscaleCommand } from "./upscale";
+import { WindowCommands } from "./window";
 
 export { CommandBar } from "./command-bar";
 export { CommandPalette } from "./palette";
@@ -26,8 +27,8 @@ export { ReloadWindowCommand } from "./reload-window";
 
 /**
  * The canvas's commands: what to generate, what the selected media can be
- * run through, the toolbar's tools, the keyboard shortcuts, and where else
- * the project folder can be opened.
+ * run through, the toolbar's tools, the keyboard shortcuts, where else
+ * the project folder can be opened, and the panels around the canvas.
  */
 export function CanvasCommands() {
   return (
@@ -58,6 +59,7 @@ export function CanvasCommands() {
       <ShortcutCommands />
       <LayerToggleCommands />
       <ProjectFolderCommands />
+      <WindowCommands />
     </>
   );
 }

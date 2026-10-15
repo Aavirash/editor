@@ -110,6 +110,11 @@ export type Command = CommandAction & {
   order?: number;
   /** Whether it is offered right now; always, when left out. */
   available?(): boolean;
+  /**
+   * False keeps it out of the palette and its recents, for a command only a
+   * menu lists: the one that opens the palette itself.
+   */
+  palette?: false;
 };
 
 /** A command as registered: with the owner of the component that registered it. */
@@ -154,7 +159,9 @@ export function CommandsProvider(props: { children: JSX.Element }) {
   };
 
   const execute = (command: RegisteredCommand) => {
-    setRecents([command.id, ...recents().filter((id) => id !== command.id)].slice(0, RECENTS_KEPT));
+    if (command.palette !== false) {
+      setRecents([command.id, ...recents().filter((id) => id !== command.id)].slice(0, RECENTS_KEPT));
+    }
     if (command.layer) {
       setLayer({ ...command, layer: command.layer });
       return;

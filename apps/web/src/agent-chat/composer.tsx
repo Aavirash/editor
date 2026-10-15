@@ -105,6 +105,7 @@ export function Composer(props: ComposerProps) {
 
       <textarea
         ref={textarea}
+        data-chat-composer
         value={props.text}
         onInput={(event) => props.onText(event.currentTarget.value)}
         onKeyDown={handleKeyDown}
