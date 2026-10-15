@@ -6,11 +6,10 @@
 // up while it works: what it applies to, and the way out. The pieces here are
 // what bars share; what goes between them is each bar's own.
 
-import { Match, Show, Switch, onCleanup, onMount, splitProps } from "solid-js";
+import { Match, Show, Switch, onCleanup, onMount } from "solid-js";
 import { useTrait, useWorld } from "@diffusionstudio/koota-solid";
 import { Name } from "@diffusionstudio/runtime";
 import { Button } from "@/components/ui/button";
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Icon } from "@/components/ui/icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getClipFallbackName } from "@/engine/timeline/style";
@@ -151,48 +150,4 @@ export function ActionBarConfirm(props: ActionBarConfirmProps) {
       <TooltipContent shortcut="⌘↵">{props.hint ?? "Confirm"}</TooltipContent>
     </Tooltip>
   );
-}
-
-/** The menus a bar opens: headed lists, laid out like the toolbar's own. */
-export const ACTION_BAR_MENU_CLASS =
-  "rounded-xl border-border bg-background px-2 pt-0 pb-2 gap-0 shadow-[0px_12px_24px_0px_rgba(0,0,0,0.24)]";
-
-export function ActionBarMenuHeader(props: { children: JSX.Element }) {
-  return <div class="flex h-8 items-center px-1 text-xs text-muted-foreground">{props.children}</div>;
-}
-
-type ActionBarMenuItemProps = {
-  checked: boolean;
-  onSelect(): void;
-  onHover?(row: HTMLElement | null): void;
-  children: JSX.Element;
-};
-
-/** A menu row that is the current pick: raised, with a check at its end. */
-export function ActionBarMenuItem(props: ActionBarMenuItemProps) {
-  const [local, rest] = splitProps(props, ["checked", "onHover", "children"]);
-
-  return (
-    <DropdownMenuItem
-      {...rest}
-      onPointerEnter={(event: PointerEvent) => local.onHover?.(event.currentTarget as HTMLElement)}
-      onPointerLeave={() => local.onHover?.(null)}
-      onFocus={(event: FocusEvent) => local.onHover?.(event.currentTarget as HTMLElement)}
-      onBlur={() => local.onHover?.(null)}
-      tone="neutral"
-      class={cx("pr-0", local.checked ? "bg-accent text-foreground" : "text-muted-foreground")}
-    >
-      <span class="min-w-0 flex-1 truncate">{local.children}</span>
-      <span class="flex size-7 items-center justify-center">
-        <Show when={local.checked}>
-          <Icon name="confirm-check" class="text-foreground" />
-        </Show>
-      </span>
-    </DropdownMenuItem>
-  );
-}
-
-/** Esc closes an open menu; it goes no further, where it would take the bar or the selection down. */
-export function keepMenuEscape(event: KeyboardEvent) {
-  event.stopPropagation();
 }

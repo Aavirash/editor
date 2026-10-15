@@ -29,12 +29,40 @@ export type Section = (typeof SECTIONS)[number];
  */
 const RECENTS_KEPT = 6;
 
+/** One of the options a command's layer lists. */
+export type LayerOption = {
+  /** Unique within the layer. */
+  id: string;
+  title: string;
+  /** At the row's end: "1920×1080". */
+  detail?: string;
+  /** More words it is found by. */
+  keywords?: string[];
+};
+
+export type LayerSection = { name: string; options: LayerOption[] };
+
+/**
+ * A second layer of the palette: the options a command is carried out
+ * with, listed in place of the commands until one is picked.
+ */
+export type CommandLayer = {
+  /** The search box's placeholder while the layer is up. */
+  placeholder: string;
+  sections(): LayerSection[];
+  /** The option highlighted when the layer comes up, as the last one picked; the first when left out. */
+  current?(): string | undefined;
+  /** Carries the command out with the option `id`; the palette is closed by then. */
+  pick(id: string): void;
+};
+
 type CommandAction =
   | {
     /** What picking it does. */
     run(): void;
     bar?: never;
     ready?: never;
+    layer?: never;
   }
   | {
     /**
@@ -45,6 +73,14 @@ type CommandAction =
     bar: Component;
     run?: never;
     ready?: never;
+    layer?: never;
+  }
+  | {
+    /** The options picking it lists in the palette, one of which carries it out. */
+    layer: CommandLayer;
+    run?: never;
+    bar?: never;
+    ready?: never;
   }
   | {
     /** What picking it does while `ready`: what the bar would ask for is settled already. */
@@ -53,6 +89,7 @@ type CommandAction =
     bar: Component;
     /** Whether it can run without the bar (what it runs over is selected). */
     ready(): boolean;
+    layer?: never;
   };
 
 export type Command = CommandAction & {
@@ -78,16 +115,24 @@ export type Command = CommandAction & {
 /** A command as registered: with the owner of the component that registered it. */
 export type RegisteredCommand = Command & { owner: Owner | null };
 
+/** A command whose options the palette lists in a layer of their own. */
+export type LayeredCommand = RegisteredCommand & { layer: CommandLayer };
+
 type CommandsContextValue = {
   /** Every command registered right now, in the order they were registered. */
   commands: Accessor<RegisteredCommand[]>;
   paletteOpen: Accessor<boolean>;
+  /** Closing it takes its layer down too. */
   setPaletteOpen(open: boolean): void;
+  /** The command whose options the palette lists in place of the commands. */
+  layer: Accessor<LayeredCommand | null>;
+  /** Back from a layer to the commands. */
+  back(): void;
   /** The ids of the commands last carried out, most recent first; kept across sessions. */
   recents: Accessor<string[]>;
   /** The command whose bar is up. */
   active: Accessor<RegisteredCommand | null>;
-  /** Carries `command` out: runs it, or puts its bar up. */
+  /** Carries `command` out: runs it, puts its bar up, or lists its options in the palette. */
   execute(command: RegisteredCommand): void;
   /** Takes the bar down. */
   close(): void;
@@ -98,13 +143,23 @@ const CommandsContext = createContext<CommandsContextValue>();
 
 export function CommandsProvider(props: { children: JSX.Element }) {
   const [commands, setCommands] = createSignal<RegisteredCommand[]>([]);
-  const [paletteOpen, setPaletteOpen] = createSignal(false);
+  const [paletteOpen, setOpen] = createSignal(false);
+  const [layer, setLayer] = createSignal<LayeredCommand | null>(null);
   const [active, setActive] = createSignal<RegisteredCommand | null>(null);
   const [recents, setRecents] = createStoredSignal(store.define<string[]>("commands.recents", []));
 
+  const setPaletteOpen = (open: boolean) => {
+    setOpen(open);
+    if (!open) setLayer(null);
+  };
+
   const execute = (command: RegisteredCommand) => {
-    setPaletteOpen(false);
     setRecents([command.id, ...recents().filter((id) => id !== command.id)].slice(0, RECENTS_KEPT));
+    if (command.layer) {
+      setLayer({ ...command, layer: command.layer });
+      return;
+    }
+    setPaletteOpen(false);
     if (!command.bar || command.ready?.()) {
       command.run?.();
     } else {
@@ -117,14 +172,15 @@ export function CommandsProvider(props: { children: JSX.Element }) {
 
     return () => {
       setCommands((list) => list.filter((entry) => entry !== command));
-      // Its component is gone, and with it what the bar was working with.
+      // Its component is gone, and with it what the bar or the layer was working with.
       if (active() === command) setActive(null);
+      if (layer()?.id === command.id) setLayer(null);
     };
   };
 
   return (
     <CommandsContext.Provider
-      value={{ commands, paletteOpen, setPaletteOpen, recents, active, execute, close: () => setActive(null), register }}
+      value={{ commands, paletteOpen, setPaletteOpen, layer, back: () => setLayer(null), recents, active, execute, close: () => setActive(null), register }}
     >
       {props.children}
     </CommandsContext.Provider>
