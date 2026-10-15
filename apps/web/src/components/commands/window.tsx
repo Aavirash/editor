@@ -26,6 +26,7 @@ export function WindowCommands() {
     id: "open-chat",
     title: "Open chat",
     group: "Window",
+    icon: "ask-chat",
     keywords: ["agent", "assistant", "message", "claude"],
     run: () => {
       if (!layout.uiVisible()) layout.toggleUI();
@@ -40,6 +41,7 @@ export function WindowCommands() {
     id: "actions",
     title: "Actions…",
     group: "Window",
+    icon: "tool.actions-spotlight",
     shortcut: ["⌘", "K"],
     palette: false,
     run: () => setPaletteOpen(true),

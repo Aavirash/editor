@@ -98,7 +98,8 @@ export type Command = CommandAction & {
   title: string;
   /** The palette section it is listed under. */
   group: Section;
-  icon?: string;
+  /** Shown beside it in the palette. */
+  icon: string;
   /** More words the palette finds it by. */
   keywords?: string[];
   /** The keys it is bound to, one cap each (["⌘", "K"]); shown, not bound. */

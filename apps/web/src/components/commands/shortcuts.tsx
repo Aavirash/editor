@@ -61,7 +61,7 @@ type Shortcut = {
   id: string;
   title: string;
   group: Section;
-  icon?: string;
+  icon: string;
   /** Its keys, one cap each. */
   keys: string[];
   keywords?: string[];
@@ -313,6 +313,7 @@ const SHORTCUTS: Shortcut[] = [
     id: "copy",
     title: "Copy",
     group: "Edit",
+    icon: "copy",
     keys: ["⌘", "C"],
     keywords: ["clipboard"],
     run: copySelection,
@@ -322,6 +323,7 @@ const SHORTCUTS: Shortcut[] = [
     id: "cut",
     title: "Cut",
     group: "Edit",
+    icon: "cut",
     keys: ["⌘", "X"],
     keywords: ["clipboard"],
     run: cutSelection,
@@ -331,6 +333,7 @@ const SHORTCUTS: Shortcut[] = [
     id: "paste",
     title: "Paste",
     group: "Edit",
+    icon: "paste",
     keys: ["⌘", "V"],
     keywords: ["clipboard"],
     run: pasteSelection,
@@ -340,6 +343,7 @@ const SHORTCUTS: Shortcut[] = [
     id: "duplicate",
     title: "Duplicate",
     group: "Edit",
+    icon: "duplicate",
     keys: ["⌘", "D"],
     keywords: ["copy", "clone"],
     run: duplicateSelection,
@@ -349,6 +353,7 @@ const SHORTCUTS: Shortcut[] = [
     id: "delete",
     title: "Delete",
     group: "Edit",
+    icon: "trash",
     keys: ["⌫"],
     keywords: ["remove"],
     run: deleteSelection,
@@ -358,6 +363,7 @@ const SHORTCUTS: Shortcut[] = [
     id: "select-all",
     title: "Select all",
     group: "Edit",
+    icon: "select-all",
     keys: ["⌘", "A"],
     run: selectAll,
   },
