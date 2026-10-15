@@ -9,7 +9,8 @@
  * controller itself never paints.
  */
 
-import { getTimelineView } from '@diffusionstudio/runtime';
+import { AdjustmentLayer, Geometry, Group, getSelection, getTimelineView } from '@diffusionstudio/runtime';
+import { Or } from 'koota';
 
 import { assert, clamp } from '@/utils';
 import { getDocumentEditor } from '@/engine/editor';
@@ -219,6 +220,24 @@ export function createTimelineController(world: World) {
 
 	const clientToTime = (clientX: number): number => clientToFrame(clientX) / getFrameRate(world);
 
+	/**
+	 * The nodes a right-click at `event` is on. A clip's regions are scoped
+	 * to its entity's id (see `renderClip`), so the scope names the node; a
+	 * keyframe's is scoped to its track, which is not one, and stands for
+	 * what is selected, as do the ruler and the work area. Empty over the
+	 * space behind the rows.
+	 */
+	const nodesAt = (event: MouseEvent): Entity[] => {
+		const rect = surface.canvas?.getBoundingClientRect();
+		if (!rect) return [];
+
+		const scope = pointer.regionAt(event.clientX - rect.left, event.clientY - rect.top)?.split('/')[0];
+		if (scope === undefined || scope === 'canvas') return [];
+
+		const node = world.query(Or(Geometry, Group, AdjustmentLayer)).find((entity) => String(entity.id()) === scope);
+		return node ? [node] : getSelection(world);
+	};
+
 	const setMinimized = (minimized: boolean): void => {
 		surface.minimized = minimized;
 	};
@@ -293,6 +312,7 @@ export function createTimelineController(world: World) {
 		scrollBy,
 		clientToFrame,
 		clientToTime,
+		nodesAt,
 		setMinimized,
 	};
 }

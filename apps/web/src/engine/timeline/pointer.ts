@@ -237,6 +237,26 @@ export function createPointer(options: PointerOptions) {
     };
   }
 
+  /**
+   * The id of the region on top at `x`, `y` (CSS pixels of the canvas) among
+   * those the last frame drew, passthrough ones aside; null over none. For
+   * asking between frames, where `region` answers only while drawing.
+   */
+  function regionAt(x: number, y: number): string | null {
+    const canvasX = x * window.devicePixelRatio;
+    const canvasY = y * window.devicePixelRatio;
+
+    const match = hitRegions.prev.findLast(({ minX, minY, maxX, maxY, passthrough }) => (
+      !passthrough &&
+      canvasX >= minX &&
+      canvasX < maxX &&
+      canvasY >= minY &&
+      canvasY < maxY
+    ));
+
+    return match?.id ?? null;
+  }
+
   function reset() {
     hitRegions.prev = [...hitRegions.next];
     hitRegions.next.length = 0;
@@ -273,6 +293,7 @@ export function createPointer(options: PointerOptions) {
     up,
     scope,
     region,
+    regionAt,
     reset,
   };
 

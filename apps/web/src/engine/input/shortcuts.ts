@@ -10,9 +10,11 @@ import {
 	Geometry,
 	Group,
 	Hidden,
+	Muted,
 	Position,
 	Root,
 	Selected,
+	Soloed,
 	Time,
 	Tool,
 	ToolType,
@@ -341,6 +343,33 @@ export function toggleSelectionHidden(world: World): void {
 
 	const hide = selected.some(entity => !entity.has(Hidden));
 	for (const entity of selected) editor.editProperty(entity, 'hidden', hide);
+}
+
+/**
+ * Mutes the selection, or unmutes it once all of it is muted — the property
+ * the mute button in the layer list writes, one write per node.
+ */
+export function toggleSelectionMuted(world: World): void {
+	const editor = getDocumentEditor(world);
+	const selected = [...world.query(Selected, NODES)];
+	if (!selected.length) return;
+
+	const mute = selected.some(entity => !entity.has(Muted));
+	for (const entity of selected) editor.editProperty(entity, 'muted', mute);
+}
+
+/**
+ * Solos the first selected node, or takes the solo off it. Solo is
+ * monitoring rather than composition, so it is the trait alone, never an
+ * edit, and only one node holds it (as the layer list's solo button has it).
+ */
+export function toggleSelectionSoloed(world: World): void {
+	const [entity] = world.query(Selected, NODES);
+	if (entity === undefined) return;
+
+	const wasSoloed = entity.has(Soloed);
+	for (const other of world.query(Soloed)) other.remove(Soloed);
+	if (!wasSoloed) entity.add(Soloed);
 }
 
 /**

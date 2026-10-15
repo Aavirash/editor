@@ -12,6 +12,7 @@ import { insertAssetsInNewScene } from '@/engine/new-scene';
 import { useLibrary } from '@/engine/library';
 import { useTimeline } from '@/context/timeline';
 import { ASSET_DRAG_TYPE } from '@/components/sidebar-left/folder-item';
+import { NodeContextMenu, TIMELINE_MENU } from '@/components/commands';
 
 /**
  * The timeline's canvas. What is drawn on it is the timeline system's
@@ -74,13 +75,13 @@ export function Timeline() {
   };
 
   return (
-    <div class="relative size-full">
+    <NodeContextMenu class="relative size-full" layout={TIMELINE_MENU} pick={timeline.nodesAt}>
       <canvas
         class="absolute inset-0"
         id="timeline-canvas"
         on:drop={handleDrop}
         on:dragover={handleDragOver}
       />
-    </div>
+    </NodeContextMenu>
   );
 }

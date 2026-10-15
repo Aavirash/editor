@@ -8,6 +8,7 @@ import { EditWithPromptCommand } from "./edit-with-prompt";
 import { ExportCurrentFrameCommand } from "./export-current-frame";
 import { ExportVideoCommand } from "./export-video";
 import { GenerateCommand } from "./generate";
+import { LayerToggleCommands } from "./layer-toggles";
 import { MakeVideoCommand } from "./make-video";
 import { ProjectFolderCommands } from "./project-folder";
 import { RemoveBackgroundCommand } from "./remove-background";
@@ -20,7 +21,7 @@ import { UpscaleCommand } from "./upscale";
 
 export { CommandBar } from "./command-bar";
 export { CommandPalette } from "./palette";
-export { NodeContextMenu } from "./node-menu";
+export { CANVAS_MENU, NodeContextMenu, TIMELINE_MENU } from "./node-menu";
 export { ReloadWindowCommand } from "./reload-window";
 
 /**
@@ -55,6 +56,7 @@ export function CanvasCommands() {
       <ToolCommand tool={ToolType.PEN} />
       <ToolCommand tool={ToolType.TEXT} />
       <ShortcutCommands />
+      <LayerToggleCommands />
       <ProjectFolderCommands />
     </>
   );
