@@ -16,12 +16,11 @@
 
 import { Sequence } from '@diffusionstudio/reconciler';
 import {
-	AssetId,
 	Computed,
 	FrameRate,
 	Host,
 	Selected,
-	getAsset,
+	findGeometryAsset,
 	getAssetFile,
 	getEntityChildren,
 	getNextName,
@@ -45,10 +44,13 @@ import type { SilenceRequest, SilenceResponse } from './worker';
 /** The silences found in one clip, in seconds of its source. */
 export type ClipSilences = { clip: Entity; silences: Span[] };
 
-/** The media `clip` plays sound from, or null when it plays none. */
+/**
+ * The media `clip` plays sound from, or null when it plays none: its own
+ * asset (an `<audio>`), or the video it is painted with (a `<rect>` with a
+ * `<videoPaint>`, as a video lands from the library).
+ */
 function soundAsset(world: World, clip: Entity): AudioAsset | VideoAsset | null {
-	const id = clip.get(AssetId)?.value;
-	const asset = id ? getAsset(world, id) : undefined;
+	const asset = findGeometryAsset(world, clip);
 	if (asset?.type === 'AUDIO') return asset;
 	if (asset?.type === 'VIDEO' && asset.channels) return asset;
 	return null;
