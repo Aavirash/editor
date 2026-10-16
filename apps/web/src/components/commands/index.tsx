@@ -4,6 +4,7 @@
 
 import { ToolType } from "@diffusionstudio/runtime";
 import { AutoCaptionsCommand } from "./auto-captions";
+import { CleanUpCommand } from "./clean-up";
 import { EditWithPromptCommand } from "./edit-with-prompt";
 import { ExportCurrentFrameCommand } from "./export-current-frame";
 import { ExportVideoCommand } from "./export-video";
@@ -47,6 +48,7 @@ export function CanvasCommands() {
       <AutoCaptionsCommand />
       <RemoveSilenceCommand />
       <MediaAssetCommands />
+      <CleanUpCommand />
       <ExportVideoCommand />
       <ExportCurrentFrameCommand />
       <ToolCommand tool={ToolType.MOVE} />

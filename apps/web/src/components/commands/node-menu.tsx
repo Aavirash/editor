@@ -64,7 +64,7 @@ export const CANVAS_MENU: NodeMenuLayout = {
   nodes: [
     CLIPBOARD,
     STRUCTURE,
-    ["shortcut:bring-to-front", "shortcut:send-to-back", "shortcut:toggle-hidden"],
+    ["clean-up", "shortcut:bring-to-front", "shortcut:send-to-back", "shortcut:toggle-hidden"],
     MEDIA,
     ASSET,
   ],
