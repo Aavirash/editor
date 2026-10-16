@@ -11,6 +11,7 @@ import {
   ContextMenuItem,
   ContextMenuPortal,
   ContextMenuSeparator,
+  ContextMenuShortcut,
   ContextMenuTrigger,
 } from "../ui/context-menu";
 import { Icon } from "../ui/icon";
@@ -66,6 +67,8 @@ export type FolderItemProps = {
   onDragStart(event: DragEvent): void;
   onRenameStart(): void;
   onRenameEnd(): void;
+  /** Escape in the name field: keeps the old name. */
+  onRenameCancel(): void;
   onOpen(): void;
   /** Deletes the selection. */
   onDelete(): void;
@@ -111,15 +114,27 @@ export function FolderItem(props: FolderItemProps) {
       event.currentTarget.blur();
     } else if (event.key === "Escape") {
       event.preventDefault();
-      props.onRenameEnd();
+      props.onRenameCancel();
     }
   };
 
+  let input: HTMLInputElement | undefined;
+
   const handleFocusElement = (el: HTMLInputElement) => {
+    input = el;
     queueMicrotask(() => {
       el.focus();
       el.select();
     });
+  };
+
+  // The open menu traps focus, so "Rename" cannot focus the field; focus it
+  // once the menu is gone, instead of handing focus back to the trigger.
+  const handleMenuCloseAutoFocus = (event: Event) => {
+    if (!props.renaming || !input) return;
+    event.preventDefault();
+    input.focus();
+    input.select();
   };
 
   return (
@@ -155,7 +170,7 @@ export function FolderItem(props: FolderItemProps) {
             <MiddleEllipsis
               text={name()}
               data-selected={props.selected}
-              class="text-xs text-center text-muted-foreground select-none data-[selected=true]:text-foreground"
+              class="text-xs text-muted-foreground select-none data-[selected=true]:text-foreground"
             />
           }
         >
@@ -170,19 +185,25 @@ export function FolderItem(props: FolderItemProps) {
             onClick={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
-            class="text-xs text-center text-foreground truncate bg-transparent rounded-sm outline-none ring-1 ring-primary px-0.5"
+            class="text-xs text-foreground truncate bg-transparent rounded-sm outline-none ring-1 ring-primary px-0.5"
           />
         </Show>
       </ContextMenuTrigger>
       <ContextMenuPortal>
-        <ContextMenuContent class="w-[220px]">
+        <ContextMenuContent class="w-[220px]" onCloseAutoFocus={handleMenuCloseAutoFocus}>
           <Show when={!props.multiple}>
-            <ContextMenuItem onSelect={props.onOpen}>Open</ContextMenuItem>
+            <ContextMenuItem onSelect={props.onOpen}>
+              Open
+              <ContextMenuShortcut>⌘↓</ContextMenuShortcut>
+            </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem onSelect={props.onRenameStart}>Rename</ContextMenuItem>
             <ContextMenuSeparator />
           </Show>
-          <ContextMenuItem onSelect={props.onDelete}>Delete</ContextMenuItem>
+          <ContextMenuItem onSelect={props.onDelete}>
+            Delete
+            <ContextMenuShortcut>⌫</ContextMenuShortcut>
+          </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenuPortal>
     </ContextMenu>

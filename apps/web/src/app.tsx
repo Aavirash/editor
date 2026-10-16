@@ -6,9 +6,10 @@ import { Router, HashRouter, Route, useLocation } from '@solidjs/router';
 import { ColorModeProvider } from '@kobalte/core';
 import { Show, createEffect, createMemo, type JSX } from 'solid-js';
 import { Toaster } from "@/components/ui/sonner";
-import { AppContextMenu } from "@/components/app-context-menu";
 
 import { AuthProvider, useAuth } from '@/context/auth';
+import { CommandsProvider } from '@/context/commands';
+import { CommandPalette, ReloadWindowCommand } from '@/components/commands';
 import { PersistRoute } from '@/lib/persist-route';
 import { useColorMode } from "@kobalte/core";
 import { mainBridge } from "@/lib/ipc";
@@ -95,15 +96,17 @@ function App() {
     <RouterComponent
       root={(props) => (
         <ColorModeProvider initialColorMode="dark">
-          <AppContextMenu>
-            <AuthProvider>
+          <AuthProvider>
+            <CommandsProvider>
               {props.children}
+              <CommandPalette />
+              <ReloadWindowCommand />
               <BootSplash />
               <UpgradeDialog />
               <PurchaseSuccess />
               <EditorApi />
-            </AuthProvider>
-          </AppContextMenu>
+            </CommandsProvider>
+          </AuthProvider>
           <Toaster />
           <EnvironmentOverlays />
           <PersistRoute />

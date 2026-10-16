@@ -32,6 +32,7 @@ import { AssetId, ChildOf, Name, Root, Scene, getAssetFile, getActiveEntity, sor
 import { assetName } from "@diffusionstudio/assets";
 import { useQuery, useWorld } from "@diffusionstudio/koota-solid";
 import { useLibrary } from "@/engine/library";
+import { useAssetSelection } from "@/engine/hooks";
 import { pickAndImport } from "@/engine/asset-actions";
 import { projectRoute } from "@/hooks/use-project-route";
 import { useProject } from "@/context/project";
@@ -94,6 +95,7 @@ export function FileMenu() {
   const navigate = useNavigate();
   const project = useProject();
   const library = useLibrary();
+  const assetSelection = useAssetSelection();
   const commands = useFileCommands();
   const [editors] = createResource(listEditors, { initialValue: [] });
 
@@ -145,7 +147,14 @@ export function FileMenu() {
       toast("No project open");
       return;
     }
-    await pickAndImport(lib, "");
+    const imported = await pickAndImport(lib, "");
+
+    if (imported.length) {
+      assetSelection.set({
+        ids: imported.map((asset) => asset.id),
+        folders: [],
+      });
+    }
   };
 
   return (

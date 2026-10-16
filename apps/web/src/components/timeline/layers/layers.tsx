@@ -21,7 +21,10 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuGroupLabel,
   DropdownMenuItem,
+  DropdownMenuItemDetail,
   DropdownMenuPortal,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -32,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipPortal, TooltipTrigger } from '@/components/ui/tooltip';
+import { CommandContextMenu, TIMELINE_HEADER_MENU } from '@/components/commands';
 import { DEFAULT_CLIP_HEIGHT, RULER_HEIGHT } from '@/engine/timeline';
 import { splitAtPlayhead } from '@/engine/split';
 import { useDerived, useEditor, useTimelineIndex } from '@/engine/hooks';
@@ -147,9 +151,10 @@ export function Layers() {
         style={{ 'grid-template-rows': `${RULER_HEIGHT}px 1fr` }}
         data-timeline-layers-container
       >
-        <div
+        <CommandContextMenu
+          layout={TIMELINE_HEADER_MENU}
           class="w-full z-10 flex flex-row gap-1 pl-2 pr-3 items-center text-muted-foreground select-none"
-          on:dblclick={handleHeaderDoubleClick}
+          onDblClick={handleHeaderDoubleClick}
         >
           <Tooltip placement="top">
             <TooltipTrigger<typeof Button>
@@ -218,47 +223,49 @@ export function Layers() {
                 <DropdownMenuContent class="w-[180px]">
                   <DropdownMenuItem onSelect={addLayer}>Add layer</DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger>Layer height</DropdownMenuSubTrigger>
-                    <DropdownMenuPortal>
-                      <DropdownMenuSubContent class="w-[140px]">
-                        <Index each={HEIGHT_PRESETS}>
-                          {(preset) => (
-                            <DropdownMenuCheckboxItem
-                              onSelect={() => setCommonHeight(preset().height)}
-                              checked={commonHeight() === preset().height}
-                            >
-                              {preset().label}
-                              <span class="text-xxs text-muted-foreground ml-auto">{preset().height}</span>
-                            </DropdownMenuCheckboxItem>
-                          )}
-                        </Index>
-                      </DropdownMenuSubContent>
-                    </DropdownMenuPortal>
-                  </DropdownMenuSub>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger>Time format</DropdownMenuSubTrigger>
-                    <DropdownMenuPortal>
-                      <DropdownMenuSubContent class="w-[200px]">
-                        <DropdownMenuRadioGroup
-                          value={timeFormat()}
-                          onChange={(value) => setTimeFormat(value as TimeFormat)}
-                        >
-                          <Index each={TIME_FORMAT_OPTIONS}>
-                            {(option) => (
-                              <DropdownMenuRadioItem value={option().value}>
-                                {option().label}
-                                <span class="text-xxs text-muted-foreground ml-auto">
-                                  {option().example}
-                                </span>
-                              </DropdownMenuRadioItem>
-                            )}
-                          </Index>
-                        </DropdownMenuRadioGroup>
-                      </DropdownMenuSubContent>
-                    </DropdownMenuPortal>
-                  </DropdownMenuSub>
+                  <DropdownMenuGroup>
+                    <DropdownMenuGroupLabel>View</DropdownMenuGroupLabel>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>Layer height</DropdownMenuSubTrigger>
+                      <DropdownMenuPortal>
+                        <DropdownMenuSubContent class="w-[160px]">
+                          <DropdownMenuGroup>
+                            <Index each={HEIGHT_PRESETS}>
+                              {(preset) => (
+                                <DropdownMenuCheckboxItem
+                                  onSelect={() => setCommonHeight(preset().height)}
+                                  checked={commonHeight() === preset().height}
+                                >
+                                  {preset().label}
+                                  <DropdownMenuItemDetail class="ml-auto">{preset().height}</DropdownMenuItemDetail>
+                                </DropdownMenuCheckboxItem>
+                              )}
+                            </Index>
+                          </DropdownMenuGroup>
+                        </DropdownMenuSubContent>
+                      </DropdownMenuPortal>
+                    </DropdownMenuSub>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>Time format</DropdownMenuSubTrigger>
+                      <DropdownMenuPortal>
+                        <DropdownMenuSubContent class="w-[200px]">
+                          <DropdownMenuRadioGroup
+                            value={timeFormat()}
+                            onChange={(value) => setTimeFormat(value as TimeFormat)}
+                          >
+                            <Index each={TIME_FORMAT_OPTIONS}>
+                              {(option) => (
+                                <DropdownMenuRadioItem value={option().value}>
+                                  {option().label}
+                                  <DropdownMenuItemDetail class="ml-auto">{option().example}</DropdownMenuItemDetail>
+                                </DropdownMenuRadioItem>
+                              )}
+                            </Index>
+                          </DropdownMenuRadioGroup>
+                        </DropdownMenuSubContent>
+                      </DropdownMenuPortal>
+                    </DropdownMenuSub>
+                  </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenuPortal>
             </DropdownMenu>
@@ -266,7 +273,7 @@ export function Layers() {
           <span class="text-xs font-mono font-thin ml-auto select-none">
             {clock()}
           </span>
-        </div>
+        </CommandContextMenu>
         <div data-timeline-layers-viewport class="relative h-full z-0 overflow-hidden">
           <div
             data-timeline-layers

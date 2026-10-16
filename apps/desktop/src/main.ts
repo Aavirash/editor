@@ -16,6 +16,7 @@ import { cliStatus, installCli, refreshCliShim, uninstallCli } from "./cli-insta
 import { applyMcp, healMcpRegistrations, mcpStatus } from "./mcp-install";
 import { configureAnalytics, countCanvasEdits, startAnalytics, track } from "./analytics";
 import { setupAppMenu } from "./menu";
+import { clipboardPaths } from "./clipboard";
 import { installedEditors, openInEditor } from "./editors";
 import { AppTray } from "./tray";
 import { WindowHost } from "./window-host";
@@ -380,6 +381,7 @@ if (squirrelLaunch) {
     // A plain Uint8Array over the PNG, so the renderer sees bytes and not a Buffer.
     return { png: new Uint8Array(png.buffer, png.byteOffset, png.byteLength), width, height };
   });
+  mainBridge.handle(MAIN_CHANNELS.CLIPBOARD_PATHS, () => clipboardPaths());
   mainBridge.handle(MAIN_CHANNELS.LOGS_GET, () => logBuffer);
   mainBridge.handle(MAIN_CHANNELS.AGENT_CHAT_ENDPOINT, () => agentChatEndpoint());
   mainBridge.handle(MAIN_CHANNELS.MCP_STATUS, () => mcpStatus());

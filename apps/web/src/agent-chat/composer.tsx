@@ -55,6 +55,16 @@ export function Composer(props: ComposerProps) {
     resize();
   });
 
+  // The panel mounts whenever the Chat tab comes up: land in the box, ready
+  // to type. It may still be disabled while the host connects, and a disabled
+  // box can't take focus — so focus it the first time it is enabled.
+  let focused = false;
+  createEffect(() => {
+    if (focused || props.blocked !== null) return;
+    focused = true;
+    textarea?.focus();
+  });
+
   // Enter sends, shift+enter breaks the line — and the editor's shortcuts
   // have no business reading what is typed here. While a turn runs Enter
   // does nothing: there is no queue.
@@ -95,6 +105,7 @@ export function Composer(props: ComposerProps) {
 
       <textarea
         ref={textarea}
+        data-chat-composer
         value={props.text}
         onInput={(event) => props.onText(event.currentTarget.value)}
         onKeyDown={handleKeyDown}

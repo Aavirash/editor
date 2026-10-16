@@ -816,6 +816,11 @@ export class DocumentEditor {
 		this.clipboard = { trees, parent: getParentEntity(roots[0]!)?.get(Source)?.value };
 	}
 
+	/** Whether `paste` has anything to insert. Not reactive: read it when asked. */
+	public canPaste(): boolean {
+		return this.clipboard.trees.length > 0;
+	}
+
 	/**
 	 * Inserts what `copy` took under `parent`, in front of `anchor` or last,
 	 * with the same props it was copied with — same position, if the parent is

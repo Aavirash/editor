@@ -15,9 +15,17 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuPortal,
-  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuPortal,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from "../ui/context-menu";
 import { toast } from "somoto";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -29,13 +37,16 @@ import {
   BreadcrumbsSeparator,
 } from "../ui/breadcrumbs";
 import { LazyAssetItem } from "./asset-item";
+import { clearRevealRequest, revealRequest } from "./reveal";
 import { FolderItem, handleFolderDrop, isAssetOrFolderDrag, ASSET_DRAG_TYPE, FOLDER_DRAG_TYPE } from "./folder-item";
 import { useLibrary } from "@/engine/library";
 import { useAssetSelection } from "@/engine/hooks";
-import { droppedFiles, importFiles, insertAssetsAtPlayhead, pickAndImport } from "@/engine/asset-actions";
+import { droppedFiles, importClipboard, importFiles, insertAssetsAtPlayhead, insertAssetsAtStart, pickAndImport } from "@/engine/asset-actions";
+import { clipboardHasMedia, hasMedia, pastedMedia, readClipboardMedia } from "@/lib/clipboard";
 import { isInputTarget } from "@/utils";
+import { useCommand } from "@/context/commands";
 
-import type { AssetLibrary } from "@diffusionstudio/assets";
+import type { Asset, AssetLibrary } from "@diffusionstudio/assets";
 
 /** The ancestors of a folder path, root excluded, nearest last. */
 /**
@@ -57,6 +68,7 @@ export function Assets() {
   let root: HTMLDivElement | undefined;
   let scroller: HTMLDivElement | undefined;
   let dragCounter = 0;
+  let createdFolder: string | null = null;
 
   const world = useWorld();
   const library = useLibrary();
@@ -66,6 +78,7 @@ export function Assets() {
   const [assetFilter, setAssetFilter] = createSignal<AssetFilter>("ALL");
   const [isDragging, setIsDragging] = createSignal(false);
   const [renamingFolder, setRenamingFolder] = createSignal<string | null>(null);
+
   const [currentFolder, setCurrentFolder] = createSignal("");
 
   const allAssets = createMemo(() => library()?.list().filter((asset) => asset.type !== "SCRIPT") ?? []);
@@ -163,6 +176,17 @@ export function Assets() {
     base = new Set();
   };
 
+  /** Selects what an import brought in; a dismissed picker or a refused drop keeps the selection. */
+  const selectImported = (assets: ReadonlyArray<Asset>) => {
+    if (!assets.length) return;
+    const keys = assets.map((asset) => assetKey(asset.id));
+    setSelection(keys);
+    anchor = keys[0];
+    lead = keys.at(-1)!;
+    base = new Set();
+    root?.focus();
+  };
+
   // Items that leave the grid (another folder opened, filtered out, moved or
   // deleted) leave the selection, so keys never act on what is not in view.
   createEffect(() => {
@@ -236,7 +260,24 @@ export function Assets() {
     return assetSelection.ids().map((id) => lib.get(id)).filter((asset) => asset !== undefined);
   };
 
-  const insertSelection = () => insertAssetsAtPlayhead(world, selectedAssets());
+  const insertSelectionAtStart = () => insertAssetsAtStart(world, selectedAssets());
+  const insertSelectionAtPlayhead = () => insertAssetsAtPlayhead(world, selectedAssets());
+
+  /** Moves the selection into a folder ('' = root), as a drop onto it would. */
+  const moveSelectionTo = (target: string) => {
+    const lib = library();
+    if (!lib) return;
+    const assets = selectedAssets();
+    if (assets.length) lib.move(assets, target);
+    for (const folder of assetSelection.folders()) {
+      if (folder === target || dirname(folder) === target) continue;
+      if (target.startsWith(`${folder}/`)) {
+        toast("Cannot move a folder into itself");
+      } else {
+        lib.moveFolder(folder, target);
+      }
+    }
+  };
 
   const deleteSelection = async () => {
     const lib = library();
@@ -298,6 +339,27 @@ export function Assets() {
     setCurrentFolder(folder);
   });
 
+  // A reveal from elsewhere (the canvas menu's Reveal in assets): its folder
+  // opens, unfiltered, with its assets selected and the first scrolled to.
+  createEffect(() => {
+    const request = revealRequest();
+    if (!request) return;
+    clearRevealRequest();
+
+    untrack(() => {
+      setQuery("");
+      setAssetFilter("ALL");
+      setCurrentFolder(request.folder);
+      const keys = request.ids.map(assetKey);
+      setSelection(keys);
+      anchor = keys[0] ?? null;
+      lead = keys.at(-1) ?? null;
+      base = new Set();
+      root?.focus();
+      requestAnimationFrame(() => keys[0] && scrollToItem(keys[0]));
+    });
+  });
+
   const withLibrary = (run: (library: AssetLibrary) => void | Promise<void>) => {
     const lib = library();
     if (!lib) {
@@ -307,7 +369,26 @@ export function Assets() {
     return run(lib);
   };
 
-  const handleImportAssets = () => withLibrary((lib) => pickAndImport(lib, currentFolder()).then(() => {}));
+  const handleImportAssets = () => withLibrary(async (lib) => selectImported(await pickAndImport(lib, currentFolder())));
+
+  /** Media copied in another app, into the folder in view: from the menu. */
+  const handlePaste = () => withLibrary(async (lib) => {
+    selectImported(await importClipboard(lib, await readClipboardMedia(), currentFolder()));
+  });
+
+  /**
+   * ⌘V with the panel in focus. Without media copied in another app, the
+   * paste goes on to the stage, as it would with the panel out of focus.
+   */
+  const handlePasteEvent = (event: ClipboardEvent) => {
+    if (isInputTarget(event)) return;
+    const media = pastedMedia(event);
+    const lib = library();
+    if (!hasMedia(media) || !lib) return;
+    event.preventDefault();
+    event.stopPropagation();
+    importClipboard(lib, media, currentFolder()).then(selectImported);
+  };
 
   const handleDrop = async (event: DragEvent) => {
     event.preventDefault();
@@ -320,7 +401,7 @@ export function Assets() {
     const lib = library();
     if (!lib) return;
     if (handleFolderDrop(lib, event, currentFolder())) return;
-    await importFiles(lib, droppedFiles(event), currentFolder());
+    selectImported(await importFiles(lib, droppedFiles(event), currentFolder()));
   };
 
   const handleDragOver = (event: DragEvent) => {
@@ -390,8 +471,9 @@ export function Assets() {
   /**
    * Finder's keys for the grid: arrows move the selection and Shift-arrows
    * grow it, ⌘A selects every item in view and ⌥⌘A or Escape none, ⌘↓ opens
-   * the selected folder and ⌘↑ goes up, ⌫ deletes the selection. Handled keys
-   * stop here, so the canvas does not act on them too.
+   * the selected folder and ⌘↑ goes up, ⌫ deletes the selection, , inserts it
+   * at the playhead and ⇧, at the start of the timeline. Handled keys stop
+   * here, so the canvas does not act on them too.
    */
   const handleKeyDown = (event: KeyboardEvent) => {
     const target = event.target as HTMLElement | null;
@@ -418,6 +500,16 @@ export function Assets() {
         handleGoToParent();
       }
 
+      return;
+    }
+
+    // By code: ⇧ turns the comma of ⇧, into another character.
+    if (!command && !event.altKey && event.code === "Comma") {
+      if (assetSelection.ids().length === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.shiftKey) insertSelectionAtStart();
+      else insertSelectionAtPlayhead();
       return;
     }
 
@@ -464,8 +556,38 @@ export function Assets() {
     const parent = currentFolder();
     const name = lib.uniqueFolderName(parent, "New folder");
     const folder = lib.createFolder(parent ? `${parent}/${name}` : name);
+    createdFolder = folder;
     setRenamingFolder(folder);
   });
+
+  const handleRenameEnd = () => {
+    createdFolder = null;
+    setRenamingFolder(null);
+  };
+
+  // The open menu traps focus, so "Create folder" cannot focus the new folder's
+  // name field; focus it once the menu is gone, instead of the panel.
+  const handleMenuCloseAutoFocus = (event: Event) => {
+    const folder = renamingFolder();
+    if (!folder) return;
+    event.preventDefault();
+    const input = itemElement(folderKey(folder))?.querySelector("input");
+    input?.focus();
+    input?.select();
+  };
+
+  // Escape while naming a folder just created takes the folder back.
+  const handleRenameCancel = async (folder: string) => {
+    const created = createdFolder === folder;
+    handleRenameEnd();
+    const lib = library();
+    if (!created || !lib) return;
+    try {
+      await lib.deleteFolder(folder);
+    } catch (e) {
+      toast.error("Failed to delete", { description: (e as Error).message });
+    }
+  };
 
   /**
    * The panel's own keys, the ones its menu advertises. These commands are the
@@ -494,6 +616,27 @@ export function Assets() {
     onCleanup(() => window.removeEventListener("keydown", handleShortcut));
   });
 
+  // The same two in the palette, into the folder the panel is showing.
+  useCommand({
+    id: "import-assets",
+    title: "Import media",
+    group: "Assets",
+    icon: "download",
+    keywords: ["assets", "files", "upload", "add"],
+    shortcut: ["⌘", "I"],
+    run: () => void handleImportAssets(),
+  });
+
+  useCommand({
+    id: "new-folder",
+    title: "Create folder",
+    group: "Assets",
+    icon: "navigation.folder",
+    keywords: ["new folder", "directory", "organize"],
+    shortcut: ["⇧", "⌘", "N"],
+    run: handleCreateFolder,
+  });
+
   return (
     <div
       on:drop={handleDrop}
@@ -504,6 +647,7 @@ export function Assets() {
       tabIndex={0}
       ref={root}
       onKeyDown={handleKeyDown}
+      on:paste={handlePasteEvent}
     >
       <div class="h-12 shrink-0 flex items-center gap-2 px-4 border-y border-border [[data-platform=win32]_&]:border-t-0">
         <div class="flex-1 min-w-0 flex items-center">
@@ -533,7 +677,7 @@ export function Assets() {
                 <TooltipContent>Filter assets</TooltipContent>
               </Tooltip>
               <DropdownMenuPortal>
-                <DropdownMenuContent class="w-32">
+                <DropdownMenuContent class="w-36">
                   <For each={ASSET_FILTER_OPTIONS}>
                     {(option) => (
                       <DropdownMenuItem
@@ -555,41 +699,19 @@ export function Assets() {
               </DropdownMenuPortal>
             </DropdownMenu>
           </Show>
-          <DropdownMenu placement="bottom-start">
-            <Tooltip>
-              <TooltipTrigger<typeof DropdownMenuTrigger>
-                as={(triggerProps: object) => (
-                  <DropdownMenuTrigger<typeof Button>
-                    {...triggerProps}
-                    as={(buttonProps) => (
-                      <Button
-                        {...buttonProps}
-                        size="icon"
-                        variant="ghost"
-                        aria-label="Add assets"
-                        class="text-muted-foreground data-expanded:bg-accent data-expanded:text-foreground"
-                      >
-                        <Icon name="plus-add" />
-                      </Button>
-                    )}
-                  />
-                )}
-              />
-              <TooltipContent shortcut="⌘I">Import assets</TooltipContent>
-            </Tooltip>
-            <DropdownMenuPortal>
-              <DropdownMenuContent class="w-40">
-                <DropdownMenuItem tone="neutral" onSelect={handleImportAssets}>
-                  Import assets
-                  <DropdownMenuShortcut>⌘I</DropdownMenuShortcut>
-                </DropdownMenuItem>
-                <DropdownMenuItem tone="neutral" onSelect={handleCreateFolder}>
-                  Create folder
-                  <DropdownMenuShortcut>⇧⌘N</DropdownMenuShortcut>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenuPortal>
-          </DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger
+              as={Button}
+              size="icon"
+              variant="ghost"
+              aria-label="Import assets"
+              class="text-muted-foreground"
+              onClick={handleImportAssets}
+            >
+              <Icon name="plus-add" />
+            </TooltipTrigger>
+            <TooltipContent shortcut="⌘I">Import assets</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -675,80 +797,120 @@ export function Assets() {
             </div>
           </div>
         </Show>
-        <div
-          ref={scroller}
-          class="flex-1 min-h-0 overflow-y-auto p-4 pt-3"
-          onClick={handleBackgroundClick}
-        >
-          <Show when={isEmptyView() && !isFiltering()}>
-            <div class="h-full flex flex-col items-center justify-center gap-4 px-6 pb-[88px] pt-4">
-              <div class="flex flex-col items-center gap-1">
-                <Icon name="navigation.folder" class="size-8 text-muted-foreground" />
-                <span class="text-xs font-450 text-muted-foreground">
-                  Add media
-                </span>
-                <p class="text-xxs text-muted-foreground text-center">
-                  Drag here, import from your computer,{"\n"}
-                  or, generate something new with AI.
-                </p>
+        {/* The grid's own items open their own menus and stop the event,
+            so this one only answers a right-click on empty space. */}
+        <ContextMenu>
+          <ContextMenuTrigger
+            as="div"
+            ref={scroller}
+            class="flex-1 min-h-0 overflow-y-auto p-4 pt-3"
+            onClick={handleBackgroundClick}
+          >
+            <Show when={isEmptyView() && !isFiltering()}>
+              <div class="h-full flex flex-col items-center justify-center gap-4 px-6 pb-[88px] pt-4">
+                <div class="flex flex-col items-center gap-1">
+                  <Icon name="navigation.folder" class="size-8 text-muted-foreground" />
+                  <span class="text-xs font-450 text-muted-foreground">
+                    Add media
+                  </span>
+                  <p class="text-xxs text-muted-foreground text-center">
+                    Drag here, import from your computer,{"\n"}
+                    or, generate something new with AI.
+                  </p>
+                </div>
+                <div class="flex flex-col gap-2 w-full">
+                  <Button variant="secondary" class="w-full" onClick={() => openPromptInput(restoreConfig("IMAGE"))}>
+                    Generate with AI
+                  </Button>
+                  <Button variant="default" class="w-full" onClick={handleImportAssets}>
+                    Import media
+                  </Button>
+                </div>
               </div>
-              <div class="flex flex-col gap-2 w-full">
-                <Button variant="secondary" class="w-full" onClick={() => openPromptInput(restoreConfig("IMAGE"))}>
-                  Generate with AI
-                </Button>
-                <Button variant="default" class="w-full" onClick={handleImportAssets}>
-                  Import media
-                </Button>
+            </Show>
+            <Show when={isEmptyView() && isFiltering()}>
+              <div class="h-full flex items-center justify-center text-xs text-muted-foreground">
+                No matching assets
               </div>
-            </div>
-          </Show>
-          <Show when={isEmptyView() && isFiltering()}>
-            <div class="h-full flex items-center justify-center text-xs text-muted-foreground">
-              No matching assets
-            </div>
-          </Show>
-          <Show when={!isEmptyView()}>
-            <div class="grid grid-cols-2 gap-x-2 gap-y-4">
-              <For each={visibleFolders()}>
-                {(folder) => (
-                  <FolderItem
-                    path={folder}
-                    renaming={renamingFolder() === folder}
-                    selected={selectedKeys().has(folderKey(folder))}
-                    multiple={selectedKeys().size > 1 && selectedKeys().has(folderKey(folder))}
-                    onSelect={(event) => handleItemClick(folderKey(folder), event)}
-                    onContextSelect={() => handleItemContextMenu(folderKey(folder))}
-                    onDragStart={(event) => handleItemDragStart(folderKey(folder), event)}
-                    onRenameStart={() => setRenamingFolder(folder)}
-                    onRenameEnd={() => setRenamingFolder(null)}
-                    onOpen={() => openFolder(folder)}
-                    onDelete={deleteSelection}
-                  />
-                )}
-              </For>
-              <For each={filteredAssets()}>
-                {(asset) => (
-                  <LazyAssetItem
-                    asset={asset}
-                    selected={selectedKeys().has(assetKey(asset.id))}
-                    multiple={selectedKeys().size > 1 && selectedKeys().has(assetKey(asset.id))}
-                    onSelect={(event) => handleItemClick(assetKey(asset.id), event)}
-                    onContextSelect={() => handleItemContextMenu(assetKey(asset.id))}
-                    onDragStart={(event) => handleItemDragStart(assetKey(asset.id), event)}
-                    onInsert={insertSelection}
-                    onDelete={deleteSelection}
-                  />
-                )}
-              </For>
-            </div>
-          </Show>
-        </div>
+            </Show>
+            <Show when={!isEmptyView()}>
+              <div class="grid grid-cols-2 gap-x-2 gap-y-4">
+                <For each={visibleFolders()}>
+                  {(folder) => (
+                    <FolderItem
+                      path={folder}
+                      renaming={renamingFolder() === folder}
+                      selected={selectedKeys().has(folderKey(folder))}
+                      multiple={selectedKeys().size > 1 && selectedKeys().has(folderKey(folder))}
+                      onSelect={(event) => handleItemClick(folderKey(folder), event)}
+                      onContextSelect={() => handleItemContextMenu(folderKey(folder))}
+                      onDragStart={(event) => handleItemDragStart(folderKey(folder), event)}
+                      onRenameStart={() => setRenamingFolder(folder)}
+                      onRenameEnd={handleRenameEnd}
+                      onRenameCancel={() => void handleRenameCancel(folder)}
+                      onOpen={() => openFolder(folder)}
+                      onDelete={deleteSelection}
+                    />
+                  )}
+                </For>
+                <For each={filteredAssets()}>
+                  {(asset) => (
+                    <LazyAssetItem
+                      asset={asset}
+                      selected={selectedKeys().has(assetKey(asset.id))}
+                      multiple={selectedKeys().size > 1 && selectedKeys().has(assetKey(asset.id))}
+                      onSelect={(event) => handleItemClick(assetKey(asset.id), event)}
+                      onContextSelect={() => handleItemContextMenu(assetKey(asset.id))}
+                      onDragStart={(event) => handleItemDragStart(assetKey(asset.id), event)}
+                      onInsertAtStart={insertSelectionAtStart}
+                      onInsertAtPlayhead={insertSelectionAtPlayhead}
+                      folders={allFolders()}
+                      onMove={moveSelectionTo}
+                      onDelete={deleteSelection}
+                    />
+                  )}
+                </For>
+              </div>
+            </Show>
+          </ContextMenuTrigger>
+          <ContextMenuPortal>
+            <ContextMenuContent class="w-52" onCloseAutoFocus={handleMenuCloseAutoFocus}>
+              <ContextMenuItem onSelect={handleImportAssets}>
+                Import assets
+                <ContextMenuShortcut>⌘I</ContextMenuShortcut>
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={() => openPromptInput(restoreConfig("IMAGE"))}>
+                Generate with AI
+              </ContextMenuItem>
+              <ContextMenuItem disabled={!clipboardHasMedia()} onSelect={handlePaste}>
+                Paste
+                <ContextMenuShortcut>⌘V</ContextMenuShortcut>
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onSelect={handleCreateFolder}>
+                Create folder
+                <ContextMenuShortcut>⇧⌘N</ContextMenuShortcut>
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem disabled={visibleKeys().length === 0} onSelect={selectAll}>
+                Select all
+                <ContextMenuShortcut>⌘A</ContextMenuShortcut>
+              </ContextMenuItem>
+              <Show when={currentFolder() !== ""}>
+                <ContextMenuItem onSelect={handleGoToParent}>
+                  Go to parent folder
+                  <ContextMenuShortcut>⌘↑</ContextMenuShortcut>
+                </ContextMenuItem>
+              </Show>
+            </ContextMenuContent>
+          </ContextMenuPortal>
+        </ContextMenu>
       </div>
     </div>
   );
 }
 
-type AssetFilter = "ALL" | "VIDEO" | "IMAGE" | "AUDIO";
+type AssetFilter = "ALL" | "VIDEO" | "IMAGE" | "AUDIO" | "TRANSCRIPT";
 
 const ASSET_FILTER_OPTIONS: ReadonlyArray<{
   value: AssetFilter;
@@ -759,6 +921,7 @@ const ASSET_FILTER_OPTIONS: ReadonlyArray<{
     { value: "VIDEO", label: "Video", icon: "video" },
     { value: "IMAGE", label: "Image", icon: "media-image" },
     { value: "AUDIO", label: "Audio", icon: "media-audio" },
+    { value: "TRANSCRIPT", label: "Captions", icon: "captions-small" },
   ];
 
 type FilterIconStackProps = {

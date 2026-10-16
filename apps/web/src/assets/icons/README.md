@@ -103,7 +103,7 @@ Save the file as `<name>.svg`, using the Figma name without `icon.24.` (`icon.24
 
 A few icons stay on their own grid on purpose:
 
-- **Brand logos** (`agent.*`, `claude`, `codex`, `social.*`, `diffusion-logo*`) are moved to the 25 frame without reshaping.
+- **Brand logos** (`agent.*`, `editor.*`, `claude`, `codex`, `social.*`, `diffusion-logo*`) are moved to the 25 frame without reshaping.
 - **The `large-*` provider logos** are left as exported.
 - **`frame`** (20×20, shown at 20 px), **`folder-thumbnail`** (32×24) and **`vertical-knob-line`** are drawn for their own sizes.
 - **`line-join-*`** use a 15×15 grid because they are shown at 14 px.

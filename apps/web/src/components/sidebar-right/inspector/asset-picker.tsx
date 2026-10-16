@@ -23,7 +23,7 @@ import { assetName } from "@diffusionstudio/assets";
 import { useTrait, useWorld } from "@diffusionstudio/koota-solid";
 import { AssetId, isScene } from "@diffusionstudio/runtime";
 import { useLibrary } from "@/engine/library";
-import { insertAssetAtPlayhead, pickAndImport } from "@/engine/asset-actions";
+import { insertAssetAtPlayhead, insertAssetsAtStart, pickAndImport } from "@/engine/asset-actions";
 import { ASSET_DRAG_TYPE } from "@/components/sidebar-left/folder-item";
 
 import type { Asset } from "@diffusionstudio/assets";
@@ -180,7 +180,10 @@ export function AssetFillPicker(props: AssetFillPickerProps) {
               onSelect={() => props.onSelectAsset(asset)}
               onContextSelect={() => props.onSelectAsset(asset)}
               onDragStart={(event) => event.dataTransfer?.setData(ASSET_DRAG_TYPE, asset.id)}
-              onInsert={() => insertAssetAtPlayhead(world, asset)}
+              onInsertAtStart={() => insertAssetsAtStart(world, [asset])}
+              onInsertAtPlayhead={() => insertAssetAtPlayhead(world, asset)}
+              folders={[...(library()?.folders() ?? [])].sort()}
+              onMove={(folder) => library()?.move([asset], folder)}
               onDelete={() => void handleDeleteAsset(asset)}
             />
           )}

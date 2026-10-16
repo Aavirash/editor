@@ -7,11 +7,18 @@ import { assert } from '@/utils';
 import { createStoredSignal } from '@/lib/store';
 import { store } from '@/init';
 
+/** Where the toolbar sits over the canvas: one of six slots it snaps to when dragged, along the top and bottom edges. */
+export const TOOLBAR_SLOTS = ['bottom', 'top', 'top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;
+
+export type ToolbarSlot = (typeof TOOLBAR_SLOTS)[number];
+
 type LayoutContextValue = {
   uiVisible: Accessor<boolean>;
   timelineMinimized: Accessor<boolean>;
   timelineHeight: Accessor<number>;
   setTimelineHeight(height: number): void;
+  toolbarSlot: Accessor<ToolbarSlot>;
+  setToolbarSlot(slot: ToolbarSlot): void;
   toggleUI(): void;
   toggleTimeline(): void;
 };
@@ -33,6 +40,12 @@ export function LayoutProvider(props: { children: JSX.Element }) {
     store.define<boolean>('layout.timelineMinimized', false),
   );
 
+  const [toolbarSlot, setToolbarSlot] = createStoredSignal(
+    store.define<ToolbarSlot>('layout.toolbarSlot', 'bottom', (value) =>
+      TOOLBAR_SLOTS.includes(value) ? value : 'bottom',
+    ),
+  );
+
   const toggleUI = () => setUiVisible(!uiVisible());
   const toggleTimeline = () => setTimelineMinimized(!timelineMinimized());
 
@@ -43,6 +56,8 @@ export function LayoutProvider(props: { children: JSX.Element }) {
         timelineMinimized,
         timelineHeight,
         setTimelineHeight,
+        toolbarSlot,
+        setToolbarSlot,
         toggleUI,
         toggleTimeline,
       }}>

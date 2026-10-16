@@ -2,12 +2,15 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { createComputed, createEffect, on } from "solid-js";
 import { useWorld } from "@diffusionstudio/koota-solid";
 import { findSceneAt, screenToWorld, worldToLocal, Library, Root } from "@diffusionstudio/runtime";
-import { CameraController, EngineCanvas } from "@/engine";
+import { CameraController, EngineCanvas, nodesAt, panBy } from "@/engine";
+import { useLayout } from "@/context/layout";
 import { insertAsset } from "@/engine/insert-asset";
 import { droppedFiles, importFiles } from "@/engine/asset-actions";
 import { Toolbar } from "./toolbar";
+import { CanvasCommands, NodeContextMenu } from "@/components/commands";
 import { DesktopAppBanner } from "./desktop-app-banner";
 import { toast } from "somoto"
 import { SceneInitOverlay } from "./scene-init-overlay";
@@ -17,6 +20,24 @@ import type { Asset } from "@diffusionstudio/assets";
 
 export function Canvas() {
   const world = useWorld();
+  const { uiVisible } = useLayout();
+  let container!: HTMLDivElement;
+
+  /**
+   * Showing or hiding the panels moves the canvas's corner across the
+   * screen; the camera moves back by as much, so what is drawn stays where it
+   * was. The computed runs before Solid applies the toggle to the DOM, so it
+   * reads where the canvas was; the effect runs after, and reads where it is
+   * now. The grid snaps rather than animates, so the new place is final.
+   */
+  let before!: DOMRect;
+  createComputed(on(uiVisible, () => (before = container.getBoundingClientRect()), { defer: true }));
+  createEffect(on(uiVisible, () => {
+    const after = container.getBoundingClientRect();
+    const dx = after.left - before.left;
+    const dy = after.top - before.top;
+    if (dx || dy) panBy(world, dx, dy);
+  }, { defer: true }));
 
   /**
    * Drops onto the canvas: library assets (dragged from the panel) land where
@@ -68,16 +89,19 @@ export function Canvas() {
   }
 
   return (
-    <div class="relative size-full bg-background">
+    <div ref={container} class="relative size-full bg-background">
       <div
         class="absolute inset-0"
         on:drop={handleDropEvent}
         on:dragover={handleDragOver}
       >
         <Toolbar />
+        <CanvasCommands />
         <DesktopAppBanner />
-        <SceneInitOverlay />
-        <EngineCanvas />
+        <NodeContextMenu class="size-full" pick={(event) => nodesAt(world, event)}>
+          <EngineCanvas />
+          <SceneInitOverlay />
+        </NodeContextMenu>
         <CameraController />
       </div>
     </div>

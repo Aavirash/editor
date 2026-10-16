@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cx } from "@/lib/cva";
+import { ActionBar } from "./action-bar";
 import { useDerived, useObjectMaskTool } from "@/engine/hooks";
 import {
   cancelObjectMask,
@@ -113,7 +114,7 @@ export function ObjectMaskBar() {
   };
 
   return (
-    <div class="absolute bottom-16 left-1/2 -translate-x-1/2 z-10 rounded-xl px-1.5 py-1 bg-background border border-border flex gap-1 items-center">
+    <ActionBar>
       <ModelMenu disabled={busy()} />
       <Separator orientation="vertical" class="min-h-5" />
       <ModePopover />
@@ -131,7 +132,7 @@ export function ObjectMaskBar() {
         </TooltipTrigger>
         <TooltipContent shortcut="⌘↵"></TooltipContent>
       </Tooltip>
-    </div>
+    </ActionBar>
   );
 }
 

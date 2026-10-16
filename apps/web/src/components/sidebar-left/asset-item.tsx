@@ -2,16 +2,20 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { createSignal, onMount, onCleanup, Show, createMemo } from "solid-js";
-import { assetName } from "@diffusionstudio/assets";
+import { createSignal, onMount, onCleanup, For, Show, createMemo } from "solid-js";
+import { assetFolder, assetName } from "@diffusionstudio/assets";
 import { replaceAssetSource, saveAssetAs } from "@/engine/asset-actions";
 import {
   ContextMenu,
   ContextMenuContent,
+  ContextMenuGroup,
   ContextMenuItem,
   ContextMenuPortal,
   ContextMenuSeparator,
   ContextMenuShortcut,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "../ui/context-menu";
 import { AssetThumbnail } from "../ui/asset-thumbnail";
@@ -29,8 +33,14 @@ export type LazyAssetItemProps = {
   onSelect(event: MouseEvent): void;
   onContextSelect(): void;
   onDragStart(event: DragEvent): void;
+  /** Inserts the selection at the start of the timeline. */
+  onInsertAtStart(): void;
   /** Inserts the selection at the playhead. */
-  onInsert(): void;
+  onInsertAtPlayhead(): void;
+  /** Every folder in the library, offered as move targets. */
+  folders: string[];
+  /** Moves the selection into a folder ('' = root). */
+  onMove(folder: string): void;
   /** Deletes the selection. */
   onDelete(): void;
 };
@@ -127,7 +137,7 @@ export function LazyAssetItem(props: LazyAssetItemProps) {
             <MiddleEllipsis
               text={name()}
               data-selected={props.selected}
-              class="text-xs text-center text-muted-foreground select-none data-[selected=true]:text-foreground"
+              class="text-xs text-muted-foreground select-none data-[selected=true]:text-foreground"
               title={props.asset.source}
             />
           }
@@ -143,26 +153,67 @@ export function LazyAssetItem(props: LazyAssetItemProps) {
             onClick={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
-            class="text-xs text-center text-foreground truncate bg-transparent rounded-sm outline-none ring-1 ring-primary px-0.5"
+            class="text-xs text-foreground truncate bg-transparent rounded-sm outline-none ring-1 ring-primary px-0.5"
           />
         </Show>
       </ContextMenuTrigger>
       <ContextMenuPortal>
         <ContextMenuContent class="w-[180px]">
-          <ContextMenuItem onSelect={props.onInsert}>
-            Insert at playhead
-          </ContextMenuItem>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>Insert...</ContextMenuSubTrigger>
+            <ContextMenuPortal>
+              <ContextMenuSubContent class="w-[180px]">
+                <ContextMenuGroup>
+                  <ContextMenuItem onSelect={props.onInsertAtStart}>
+                    Insert at start
+                    <ContextMenuShortcut>⇧,</ContextMenuShortcut>
+                  </ContextMenuItem>
+                  <ContextMenuItem onSelect={props.onInsertAtPlayhead}>
+                    Insert at playhead
+                    <ContextMenuShortcut>,</ContextMenuShortcut>
+                  </ContextMenuItem>
+                </ContextMenuGroup>
+              </ContextMenuSubContent>
+            </ContextMenuPortal>
+          </ContextMenuSub>
+          <Show when={props.folders.length > 0}>
+            <ContextMenuSub>
+              <ContextMenuSubTrigger>Move to...</ContextMenuSubTrigger>
+              <ContextMenuPortal>
+                <ContextMenuSubContent class="w-[220px]">
+                  <ContextMenuGroup>
+                    <ContextMenuItem
+                      disabled={!props.multiple && assetFolder(props.asset) === ""}
+                      onSelect={() => props.onMove("")}>
+                      All assets
+                    </ContextMenuItem>
+                    <For each={props.folders}>
+                      {(folder) => (
+                        <ContextMenuItem
+                          disabled={!props.multiple && assetFolder(props.asset) === folder}
+                          onSelect={() => props.onMove(folder)}>
+                          <MiddleEllipsis text={folder} title={folder} class="min-w-0 flex-1" />
+                        </ContextMenuItem>
+                      )}
+                    </For>
+                  </ContextMenuGroup>
+                </ContextMenuSubContent>
+              </ContextMenuPortal>
+            </ContextMenuSub>
+          </Show>
           <Show when={!props.multiple}>
             <ContextMenuSeparator />
-            <ContextMenuItem onSelect={() => setIsRenaming(true)}>
-              Rename
-            </ContextMenuItem>
-            <ContextMenuItem onSelect={handleReplaceMedia}>
-              Replace
-            </ContextMenuItem>
-            <ContextMenuItem onSelect={handleSaveAs}>
-              Save as
-            </ContextMenuItem>
+            <ContextMenuGroup>
+              <ContextMenuItem onSelect={() => setIsRenaming(true)}>
+                Rename
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={handleReplaceMedia}>
+                Replace
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={handleSaveAs}>
+                Save as
+              </ContextMenuItem>
+            </ContextMenuGroup>
           </Show>
           <ContextMenuSeparator />
           <ContextMenuItem onSelect={props.onDelete}>

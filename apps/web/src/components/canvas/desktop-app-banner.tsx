@@ -10,15 +10,18 @@ import { createStoredSignal } from "@/lib/store";
 import { desktopAppDownloadLabel, downloadDesktopApp } from "@/lib/desktop-app";
 import { track } from "@/lib/analytics";
 import { store } from "@/init";
+import { cx } from "@/lib/cva";
+import { useLayout } from "@/context/layout";
 
 const BANNER_IMAGE = new URL("@/assets/images/desktop-app-banner.png", import.meta.url).href;
 
 /**
  * Dismissible promo for the desktop app, pinned to the bottom left of the
- * canvas. Hidden in the desktop build, which is the thing being advertised.
+ * canvas, or the bottom right while the toolbar is in that corner. Hidden in the desktop build, which is the thing being advertised.
  */
 export function DesktopAppBanner() {
   const { isDesktop } = useEditorApi();
+  const { toolbarSlot } = useLayout();
   const [dismissed, setDismissed] = createStoredSignal(
     store.define("canvas.desktop-app-banner-dismissed", false),
   );
@@ -32,7 +35,12 @@ export function DesktopAppBanner() {
 
   return (
     <Show when={!dismissed() && !isDesktop}>
-      <div class="absolute bottom-4 left-4 z-10 flex w-[220px] flex-col gap-1 rounded-md border border-border bg-background pb-3 shadow-[0px_0px_1px_2px_rgba(0,0,0,0.12),0px_4px_12px_8px_rgba(0,0,0,0.12)]">
+      <div
+        class={cx(
+          "absolute bottom-4 z-10 flex w-[220px] flex-col gap-1 rounded-md border border-border bg-background pb-3 shadow-[0px_0px_1px_2px_rgba(0,0,0,0.12),0px_4px_12px_8px_rgba(0,0,0,0.12)]",
+          toolbarSlot() === "bottom-left" ? "right-4" : "left-4",
+        )}
+      >
         <div class="relative aspect-[220/122] w-full overflow-hidden rounded-t-md">
           <img src={BANNER_IMAGE} alt="" class="pointer-events-none size-full object-cover" />
           <button

@@ -20,6 +20,7 @@ import {
   entityWorldMat,
   getParentEntity,
   getParentNode,
+  getViewMatrix,
   invert2D,
   isScene,
   store,
@@ -158,4 +159,89 @@ export function distributeSelection(world: World, axis: Axis): void {
     moveByWorldDelta(world, entity, horizontal ? delta : 0, horizontal ? 0 : delta);
     cursor += size(box) + gap;
   }
+}
+
+/** Between nodes and between rows of a cleaned-up selection, in document space. */
+const CLEAN_UP_GAP = 40;
+
+type Size = { width: number; height: number };
+
+/** `sizes`, by index, in rows no wider than `maxWidth` (a row always takes one), `gap` apart. */
+function flowRows(sizes: Size[], order: number[], maxWidth: number, gap: number): number[][] {
+  const rows: number[][] = [];
+  let width = 0;
+  for (const index of order) {
+    const row = rows.at(-1);
+    const next = width + gap + sizes[index]!.width;
+    if (row && next <= maxWidth) {
+      row.push(index);
+      width = next;
+    } else {
+      rows.push([index]);
+      width = sizes[index]!.width;
+    }
+  }
+  return rows;
+}
+
+/**
+ * Where each of `sizes` goes, as offsets from the layout's top-left: like a
+ * Finder clean up, largest first, in rows read left to right with `gap`
+ * between neighbours and between rows, each node top-aligned in its row.
+ * Sorted by size, nodes alike end up side by side, so nodes of one size line
+ * up in columns too. Of the row widths that fit a whole number of the
+ * largest nodes in the first row, the one that makes the squarest block.
+ */
+export function cleanUpLayout(sizes: Size[], gap: number): { x: number; y: number }[] {
+  const area = (size: Size) => size.width * size.height;
+  const order = sizes.map((_, index) => index).sort((a, b) => area(sizes[b]!) - area(sizes[a]!) || a - b);
+
+  let best: { rows: number[][]; score: number } | undefined;
+  let firstRow = -gap;
+  for (const index of order) {
+    firstRow += gap + sizes[index]!.width;
+    const rows = flowRows(sizes, order, firstRow, gap);
+    const width = Math.max(...rows.map((row) => row.reduce((sum, i) => sum + sizes[i]!.width, 0) + (row.length - 1) * gap));
+    const height = rows.reduce((sum, row) => sum + Math.max(...row.map((i) => sizes[i]!.height)), 0) + (rows.length - 1) * gap;
+    const score = Math.max(width / height, height / width);
+    if (!best || score < best.score) best = { rows, score };
+  }
+
+  const offsets = sizes.map(() => ({ x: 0, y: 0 }));
+  let y = 0;
+  for (const row of best?.rows ?? []) {
+    let x = 0;
+    for (const index of row) {
+      offsets[index] = { x, y };
+      x += sizes[index]!.width + gap;
+    }
+    y += Math.max(...row.map((index) => sizes[index]!.height)) + gap;
+  }
+  return offsets;
+}
+
+/**
+ * Lays the selected nodes out from the selection's top-left corner (see
+ * `cleanUpLayout`), with a gap that stays the same at any zoom. Needs two.
+ */
+export function cleanUpSelection(world: World): void {
+  const entities = getAlignableSelection(world);
+  if (entities.length < 2) return;
+
+  // The boxes are in device space: the gap is scaled by the camera's zoom.
+  const view = getViewMatrix(world);
+  const gap = CLEAN_UP_GAP * Math.sqrt(Math.abs(view.a * view.d - view.b * view.c));
+
+  const boxes = entities.map((entity) => boundsOf(world, entity));
+  const mask = union(boxes);
+  const offsets = cleanUpLayout(
+    boxes.map((box) => ({ width: box.maxX - box.minX, height: box.maxY - box.minY })),
+    gap,
+  );
+
+  entities.forEach((entity, index) => {
+    const box = boxes[index]!;
+    const offset = offsets[index]!;
+    moveByWorldDelta(world, entity, mask.minX + offset.x - box.minX, mask.minY + offset.y - box.minY);
+  });
 }
