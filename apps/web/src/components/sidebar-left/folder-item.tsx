@@ -11,6 +11,7 @@ import {
   ContextMenuItem,
   ContextMenuPortal,
   ContextMenuSeparator,
+  ContextMenuShortcut,
   ContextMenuTrigger,
 } from "../ui/context-menu";
 import { Icon } from "../ui/icon";
@@ -196,7 +197,10 @@ export function FolderItem(props: FolderItemProps) {
             <ContextMenuItem onSelect={props.onRenameStart}>Rename</ContextMenuItem>
             <ContextMenuSeparator />
           </Show>
-          <ContextMenuItem onSelect={props.onDelete}>Delete</ContextMenuItem>
+          <ContextMenuItem onSelect={props.onDelete}>
+            Delete
+            <ContextMenuShortcut>⌫</ContextMenuShortcut>
+          </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenuPortal>
     </ContextMenu>
