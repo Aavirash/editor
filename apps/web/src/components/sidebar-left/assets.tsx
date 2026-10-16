@@ -37,6 +37,7 @@ import {
   BreadcrumbsSeparator,
 } from "../ui/breadcrumbs";
 import { LazyAssetItem } from "./asset-item";
+import { clearRevealRequest, revealRequest } from "./reveal";
 import { FolderItem, handleFolderDrop, isAssetOrFolderDrag, ASSET_DRAG_TYPE, FOLDER_DRAG_TYPE } from "./folder-item";
 import { useLibrary } from "@/engine/library";
 import { useAssetSelection } from "@/engine/hooks";
@@ -336,6 +337,27 @@ export function Assets() {
     if (!folders || !folder || folders.has(folder)) return;
     while (folder && !folders.has(folder)) folder = dirname(folder);
     setCurrentFolder(folder);
+  });
+
+  // A reveal from elsewhere (the canvas menu's Reveal in assets): its folder
+  // opens, unfiltered, with its assets selected and the first scrolled to.
+  createEffect(() => {
+    const request = revealRequest();
+    if (!request) return;
+    clearRevealRequest();
+
+    untrack(() => {
+      setQuery("");
+      setAssetFilter("ALL");
+      setCurrentFolder(request.folder);
+      const keys = request.ids.map(assetKey);
+      setSelection(keys);
+      anchor = keys[0] ?? null;
+      lead = keys.at(-1) ?? null;
+      base = new Set();
+      root?.focus();
+      requestAnimationFrame(() => keys[0] && scrollToItem(keys[0]));
+    });
   });
 
   const withLibrary = (run: (library: AssetLibrary) => void | Promise<void>) => {

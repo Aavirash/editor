@@ -8,14 +8,21 @@ import { useProject } from "@/context/project";
 import { generateCaptions } from "@/engine/generate";
 import { useActiveScene, useSelection } from "@/engine/hooks";
 
-/** Captions for the selected scene, or the active one, the one being edited, when none is selected. */
+/**
+ * Captions for the selected scene, or the active one, the one being edited,
+ * when nothing is selected. A selection without a scene in it has none: other
+ * nodes are not captioned.
+ */
 export function useAutoCaptions() {
   const world = useWorld();
   const project = useProject();
   const { nodes } = useSelection();
   const active = useActiveScene();
 
-  const scene = () => nodes().find((node) => node.has(Scene)) ?? active();
+  const scene = () => {
+    const selected = nodes();
+    return selected.length ? selected.find((node) => node.has(Scene)) ?? null : active();
+  };
 
   const generate = () => {
     const target = scene();

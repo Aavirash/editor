@@ -18,6 +18,9 @@ import {
   ContextMenuPortal,
   ContextMenuSeparator,
   ContextMenuShortcut,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { useCommands } from "@/context/commands";
@@ -25,16 +28,21 @@ import { getDocumentEditor, useSelection } from "@/engine";
 
 import type { Entity } from "koota";
 import type { JSX } from "solid-js";
-import type { RegisteredCommand } from "@/context/commands";
+import type { CommandLayer, RegisteredCommand } from "@/context/commands";
 
 /**
- * What a menu lists, by command id, a rule between sections: over a
- * selection, and over nothing. A command that has nothing in the selection to
- * work on is left out, and a section left with none goes with it.
+ * What a menu lists, a rule between sections: commands by id, and submenus
+ * of them. A command that has nothing in the selection to work on is left
+ * out, and a section or submenu left with none goes with it.
  */
+export type MenuLayout = MenuEntry[][];
+
+export type MenuEntry = string | { submenu: string; layout: MenuLayout };
+
+/** What a menu lists over a selection, and over nothing. */
 export type NodeMenuLayout = {
-  nodes: string[][];
-  empty: string[][];
+  nodes: MenuLayout;
+  empty: MenuLayout;
 };
 
 const CLIPBOARD = ["shortcut:copy", "shortcut:cut", "shortcut:paste", "shortcut:duplicate", "shortcut:delete"];
@@ -45,8 +53,14 @@ const STRUCTURE = [
   "shortcut:wrap-in-sequence",
   "shortcut:unwrap-sequence",
 ];
-const MEDIA = ["upscale", "remove-background", "remove-silence", "auto-captions"];
-const GENERATE = ["edit-with-prompt", "make-video", "rerun", "reuse-settings"];
+/** What works on the selected media, the transforms in a submenu of their own. */
+const MEDIA: MenuEntry[] = [
+  { submenu: "Media actions", layout: [["upscale", "remove-background", "remove-silence"]] },
+  "edit-with-prompt",
+  "auto-captions",
+];
+const GENERATE = ["make-video", "rerun", "reuse-settings"];
+const ASSET = ["set-folder", "reveal-in-assets", "reveal-in-finder"];
 
 export const CANVAS_MENU: NodeMenuLayout = {
   nodes: [
@@ -55,6 +69,7 @@ export const CANVAS_MENU: NodeMenuLayout = {
     ["shortcut:bring-to-front", "shortcut:send-to-back", "shortcut:toggle-hidden"],
     MEDIA,
     GENERATE,
+    ASSET,
   ],
   empty: [["shortcut:paste", "shortcut:select-all"], ["toggle-ui", "toggle-timeline", "toggle-chat", "actions"]],
 };
@@ -80,7 +95,7 @@ export const TIMELINE_MENU: NodeMenuLayout = {
  * The timeline header's: what its buttons do, and putting the timeline away
  * (or bringing it back), which a double-click on it does too.
  */
-export const TIMELINE_HEADER_MENU: string[][] = [
+export const TIMELINE_HEADER_MENU: MenuLayout = [
   ["shortcut:toggle-playback", "shortcut:split"],
   ["toggle-timeline"],
 ];
@@ -88,12 +103,48 @@ export const TIMELINE_HEADER_MENU: string[][] = [
 /** Whether `command` would run over the selection rather than ask for a target. */
 const offered = (command: RegisteredCommand) => (command.available?.() ?? true) && (command.ready?.() ?? true);
 
-/** `layout`'s commands that are on offer, sections left with none left out. */
-function resolve(commands: RegisteredCommand[], layout: string[][]): RegisteredCommand[][] {
+/** A menu entry as it is shown: a command on offer, or a submenu with some. */
+type MenuItem = RegisteredCommand | Submenu;
+
+type Submenu = { submenu: string; sections: MenuItem[][] };
+
+const isSubmenu = (item: MenuItem): item is Submenu => "submenu" in item;
+
+/** Each submenu entry as last resolved. */
+const resolved = new WeakMap<object, Submenu>();
+
+const sameSections = (a: MenuItem[][], b: MenuItem[][]) =>
+  a.length === b.length &&
+  a.every((section, i) => section.length === b[i]!.length && section.every((item, j) => item === b[i]![j]));
+
+/** `layout`'s commands that are on offer, sections and submenus left with none left out. */
+function resolve(commands: RegisteredCommand[], layout: MenuLayout): MenuItem[][] {
   const byId = new Map(commands.map((command) => [command.id, command]));
-  return layout
-    .map((ids) => ids.map((id) => byId.get(id)).filter((command) => command !== undefined).filter(offered))
-    .filter((section) => section.length > 0);
+
+  const resolveLayout = (sections: MenuLayout): MenuItem[][] =>
+    sections
+      .map((entries) =>
+        entries
+          .map((entry): MenuItem | undefined => {
+            if (typeof entry !== "string") {
+              const sections = resolveLayout(entry.layout);
+              if (!sections.length) return undefined;
+              // The same one while what it lists is: a new one would be
+              // mounted afresh, closing the submenu under the pointer.
+              const last = resolved.get(entry);
+              if (last && sameSections(last.sections, sections)) return last;
+              const submenu = { submenu: entry.submenu, sections };
+              resolved.set(entry, submenu);
+              return submenu;
+            }
+            const command = byId.get(entry);
+            return command && offered(command) ? command : undefined;
+          })
+          .filter((item) => item !== undefined),
+      )
+      .filter((section) => section.length > 0);
+
+  return resolveLayout(layout);
 }
 
 export type NodeContextMenuProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, "onContextMenu"> & {
@@ -142,8 +193,8 @@ export function NodeContextMenu(props: NodeContextMenuProps) {
 }
 
 export type CommandContextMenuProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, "onContextMenu"> & {
-  /** What the menu lists, by command id, a rule between sections. */
-  layout: string[][];
+  /** What the menu lists, a rule between sections. */
+  layout: MenuLayout;
 };
 
 /**
@@ -169,14 +220,13 @@ export function CommandContextMenu(props: CommandContextMenuProps) {
 
 type CommandMenuProps = JSX.HTMLAttributes<HTMLDivElement> & {
   /** What is on offer, followed while the menu is open. */
-  sections(): RegisteredCommand[][];
+  sections(): MenuItem[][];
   onContextMenu(event: MouseEvent): void;
 };
 
 function CommandMenu(props: CommandMenuProps) {
   const [local, rest] = splitProps(props, ["sections", "children"]);
-  const { execute } = useCommands();
-  const [frozen, setFrozen] = createSignal<RegisteredCommand[][] | null>(null);
+  const [frozen, setFrozen] = createSignal<MenuItem[][] | null>(null);
 
   /**
    * Holds the list as it stands until the menu is open again: a command run
@@ -196,24 +246,103 @@ function CommandMenu(props: CommandMenuProps) {
       </ContextMenuTrigger>
       <ContextMenuPortal>
         <ContextMenuContent class="w-[220px]">
-          <For each={sections()}>
+          <MenuSections sections={sections()} onPick={freeze} />
+        </ContextMenuContent>
+      </ContextMenuPortal>
+    </ContextMenu>
+  );
+}
+
+type MenuSectionsProps = {
+  sections: MenuItem[][];
+  /** Before the item picked is carried out. */
+  onPick(): void;
+};
+
+/** A menu's items, or a submenu's, a rule between sections. */
+function MenuSections(props: MenuSectionsProps) {
+  const { execute } = useCommands();
+
+  const item = (entry: MenuItem) => {
+    if (isSubmenu(entry)) {
+      return (
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>{entry.submenu}</ContextMenuSubTrigger>
+          <ContextMenuPortal>
+            <ContextMenuSubContent class="w-[220px]">
+              <MenuSections sections={entry.sections} onPick={props.onPick} />
+            </ContextMenuSubContent>
+          </ContextMenuPortal>
+        </ContextMenuSub>
+      );
+    }
+
+    const command = entry;
+    if (command.layer) return <LayerSubmenu title={command.title} layer={command.layer} onPick={props.onPick} />;
+
+    return (
+      <ContextMenuItem
+        onSelect={() => {
+          props.onPick();
+          execute(command);
+        }}
+      >
+        {command.title}
+        <Show when={command.shortcut}>
+          {(keys) => <ContextMenuShortcut>{keys().join("")}</ContextMenuShortcut>}
+        </Show>
+      </ContextMenuItem>
+    );
+  };
+
+  return (
+    <For each={props.sections}>
+      {(section, index) => (
+        <>
+          <Show when={index() > 0}>
+            <ContextMenuSeparator />
+          </Show>
+          <ContextMenuGroup>
+            <For each={section}>{item}</For>
+          </ContextMenuGroup>
+        </>
+      )}
+    </For>
+  );
+}
+
+type LayerSubmenuProps = {
+  title: string;
+  layer: CommandLayer;
+  /** Before the option is carried out. */
+  onPick(): void;
+};
+
+/** A command the palette lists options for, as a submenu of them: a rule between its sections. */
+function LayerSubmenu(props: LayerSubmenuProps) {
+  return (
+    <ContextMenuSub>
+      <ContextMenuSubTrigger>{props.title}</ContextMenuSubTrigger>
+      <ContextMenuPortal>
+        <ContextMenuSubContent class="w-[220px]">
+          <For each={props.layer.sections()}>
             {(section, index) => (
               <>
                 <Show when={index() > 0}>
                   <ContextMenuSeparator />
                 </Show>
                 <ContextMenuGroup>
-                  <For each={section}>
-                    {(command) => (
+                  <For each={section.options}>
+                    {(option) => (
                       <ContextMenuItem
                         onSelect={() => {
-                          freeze();
-                          execute(command);
+                          props.onPick();
+                          props.layer.pick(option.id);
                         }}
                       >
-                        {command.title}
-                        <Show when={command.shortcut}>
-                          {(keys) => <ContextMenuShortcut>{keys().join("")}</ContextMenuShortcut>}
+                        <span class="min-w-0 flex-1 truncate">{option.title}</span>
+                        <Show when={option.detail}>
+                          {(detail) => <ContextMenuShortcut>{detail()}</ContextMenuShortcut>}
                         </Show>
                       </ContextMenuItem>
                     )}
@@ -222,8 +351,8 @@ function CommandMenu(props: CommandMenuProps) {
               </>
             )}
           </For>
-        </ContextMenuContent>
+        </ContextMenuSubContent>
       </ContextMenuPortal>
-    </ContextMenu>
+    </ContextMenuSub>
   );
 }

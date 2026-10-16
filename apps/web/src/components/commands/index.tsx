@@ -10,6 +10,7 @@ import { ExportVideoCommand } from "./export-video";
 import { GenerateCommand } from "./generate";
 import { LayerToggleCommands } from "./layer-toggles";
 import { MakeVideoCommand } from "./make-video";
+import { MediaAssetCommands } from "./media-asset";
 import { ProjectFolderCommands } from "./project-folder";
 import { RemoveBackgroundCommand } from "./remove-background";
 import { RemoveSilenceCommand } from "./remove-silence";
@@ -45,6 +46,7 @@ export function CanvasCommands() {
       <RemoveBackgroundCommand />
       <AutoCaptionsCommand />
       <RemoveSilenceCommand />
+      <MediaAssetCommands />
       <ExportVideoCommand />
       <ExportCurrentFrameCommand />
       <ToolCommand tool={ToolType.MOVE} />
