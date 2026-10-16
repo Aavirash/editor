@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { createEffect, on, onCleanup, onMount } from "solid-js";
+import { createComputed, createEffect, on } from "solid-js";
 import { useWorld } from "@diffusionstudio/koota-solid";
 import { findSceneAt, screenToWorld, worldToLocal, Library, Root } from "@diffusionstudio/runtime";
 import { CameraController, EngineCanvas, nodesAt, panBy } from "@/engine";
@@ -24,27 +24,18 @@ export function Canvas() {
   let container!: HTMLDivElement;
 
   /**
-   * Where the canvas sits on screen, kept up as the panels around it change
-   * size (the left one animates between the sidebar's tabs).
-   */
-  let origin: DOMRect | null = null;
-  const observer = new ResizeObserver(() => (origin = container.getBoundingClientRect()));
-  onMount(() => observer.observe(container));
-  onCleanup(() => observer.disconnect());
-
-  /**
    * Showing or hiding the panels moves the canvas's corner across the
    * screen; the camera moves back by as much, so what is drawn stays where it
-   * was. The grid snaps rather than animates when the panels come and go, so
-   * the new place can be read straight away, ahead of the observer.
+   * was. The computed runs before Solid applies the toggle to the DOM, so it
+   * reads where the canvas was; the effect runs after, and reads where it is
+   * now. The grid snaps rather than animates, so the new place is final.
    */
+  let before!: DOMRect;
+  createComputed(on(uiVisible, () => (before = container.getBoundingClientRect()), { defer: true }));
   createEffect(on(uiVisible, () => {
-    const before = origin;
-    origin = container.getBoundingClientRect();
-    if (!before) return;
-
-    const dx = origin.left - before.left;
-    const dy = origin.top - before.top;
+    const after = container.getBoundingClientRect();
+    const dx = after.left - before.left;
+    const dy = after.top - before.top;
     if (dx || dy) panBy(world, dx, dy);
   }, { defer: true }));
 
