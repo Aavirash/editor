@@ -13,8 +13,8 @@ import { cx } from "@/lib/cva"
 
 export const ContextMenuPortal = ContextMenuPrimitive.Portal
 
-/** Matches the horizontal offset dropdown submenus use. */
-const SUB_GUTTER = 10
+/** Places a submenu's edge flush against its trigger, overlapping the parent menu's padding. */
+const SUB_GUTTER = 0
 /** Lifts a submenu by its padding + border so its first item lines up with the trigger. */
 const SUB_SHIFT = -9
 const ContextMenuContentDisabledContext = createContext<Accessor<boolean>>()
