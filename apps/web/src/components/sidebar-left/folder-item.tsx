@@ -192,7 +192,10 @@ export function FolderItem(props: FolderItemProps) {
       <ContextMenuPortal>
         <ContextMenuContent class="w-[220px]" onCloseAutoFocus={handleMenuCloseAutoFocus}>
           <Show when={!props.multiple}>
-            <ContextMenuItem onSelect={props.onOpen}>Open</ContextMenuItem>
+            <ContextMenuItem onSelect={props.onOpen}>
+              Open
+              <ContextMenuShortcut>⌘↓</ContextMenuShortcut>
+            </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem onSelect={props.onRenameStart}>Rename</ContextMenuItem>
             <ContextMenuSeparator />
