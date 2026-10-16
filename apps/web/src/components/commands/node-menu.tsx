@@ -55,11 +55,9 @@ const STRUCTURE = [
 ];
 /** What works on the selected media, the transforms in a submenu of their own. */
 const MEDIA: MenuEntry[] = [
-  { submenu: "Media actions", layout: [["upscale", "remove-background", "remove-silence"]] },
-  "edit-with-prompt",
+  { submenu: "Media actions", layout: [["upscale", "remove-background", "remove-silence", "rerun", "make-video", "reuse-settings", "edit-with-prompt"]] },
   "auto-captions",
 ];
-const GENERATE = ["make-video", "rerun", "reuse-settings"];
 const ASSET = ["set-folder", "reveal-in-assets", "reveal-in-finder"];
 
 export const CANVAS_MENU: NodeMenuLayout = {
@@ -68,7 +66,6 @@ export const CANVAS_MENU: NodeMenuLayout = {
     STRUCTURE,
     ["shortcut:bring-to-front", "shortcut:send-to-back", "shortcut:toggle-hidden"],
     MEDIA,
-    GENERATE,
     ASSET,
   ],
   empty: [["shortcut:paste", "shortcut:select-all"], ["toggle-ui", "toggle-timeline", "toggle-chat", "actions"]],
@@ -86,7 +83,6 @@ export const TIMELINE_MENU: NodeMenuLayout = {
     STRUCTURE,
     ["shortcut:bring-to-front", "shortcut:send-to-back", "shortcut:toggle-hidden", "toggle-muted", "toggle-soloed"],
     MEDIA,
-    GENERATE,
   ],
   empty: [["shortcut:paste"]],
 };
