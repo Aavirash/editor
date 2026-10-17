@@ -378,6 +378,7 @@ type TranscriptSegment = { text: string; words: TranscriptWord[] };
 function CaptionContent(props: { entity: Entity }) {
   const world = useWorld();
   const editor = useEditor();
+  const tool = useTool();
   const [draft, setDraft] = createSignal('');
   const current = () => store(world, Chars).value[props.entity.id()] ?? '';
 
@@ -425,7 +426,17 @@ function CaptionContent(props: { entity: Entity }) {
 
   return (
     <ControlRow label="Caption" contentClass="flex flex-col">
-      <GrowingTextArea value={draft()} maxRows={8} onInput={setDraft} onBlur={() => void commit()} />
+      <GrowingTextArea
+        value={draft()}
+        maxRows={8}
+        onInput={setDraft}
+        focused={tool() === ToolType.TEXT_EDIT}
+        onFocus={() => world.set(Tool, { value: ToolType.TEXT_EDIT })}
+        onBlur={() => {
+          world.set(Tool, { value: ToolType.MOVE });
+          void commit();
+        }}
+      />
     </ControlRow>
   );
 }

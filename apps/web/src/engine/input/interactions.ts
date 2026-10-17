@@ -19,7 +19,7 @@
 import {
 	ChildOf, Computed, Culled, Geometry, Group, Hovering,
 	Interactive, KeepAspectRatio, RenderSurface, Root, Scene,
-	Selected, Skew, Time, Tool, ToolType, isText,
+	Chars, Selected, Skew, Time, Tool, ToolType, isText,
 	decompose2D, entityPivot,
 	entityOffset, entityQuad, entityWorldMat, enterEntity,
 	findKeyframeTrackEntity, getParentEntity, getParentNode, getSceneAncestor,
@@ -178,10 +178,13 @@ export function handleGeometryInteraction(world: World, event: DispatchedPointer
 
 	// Double-click a text layer to edit what it says: the inspector's Content
 	// field takes focus (the same place the text tool types into).
-	if (event.type === 'dblclick' && event.target.kind === 'entity' && isText(event.target.id)) {
-		editor.select(event.target.id);
-		world.set(Tool, { value: ToolType.TEXT_EDIT });
-		return;
+	if (event.type === 'dblclick' && event.target.kind === 'entity') {
+		const entity = event.target.id;
+		if (isText(entity) || entity.has(Chars)) {
+			editor.select(entity);
+			world.set(Tool, { value: ToolType.TEXT_EDIT });
+			return;
+		}
 	}
 
 	// Double-click on a path edits its vertices.
