@@ -18,24 +18,20 @@ import {
 import { ControlledTextField } from '@/components/ui/text-field';
 import { useHas, useTrait, useWorld } from '@diffusionstudio/koota-solid';
 import {
-  AssetId,
   Chars,
   Computed,
   FONT_WEIGHTS,
-  FrameRate,
-  Library,
   Size,
   TextAlign,
   TextBaseline,
   TextStyle,
   Tool,
   ToolType,
-  getAssetFile,
   isCaption,
   isText,
   store,
 } from '@diffusionstudio/runtime';
-import { toast } from 'somoto';
+import { commitCaptionText } from '@/engine/caption-edit';
 import { FontDropdown } from './font-picker';
 import { useDerived, useEditor, useTool } from '@/engine/hooks';
 import { removeKeyframeTrack, syncKeyframe } from '@/engine/keyframes';
@@ -366,9 +362,6 @@ const VERTICAL_ALIGNS: Record<TextBaseline, string> = {
 };
 
 
-type TranscriptWord = { text: string; start: number; end: number };
-type TranscriptSegment = { text: string; words: TranscriptWord[] };
-
 /**
  * The words a caption shows at the playhead, editable. Captions are decoded
  * from a transcript asset, so an edit rewrites the segment covering the
@@ -377,7 +370,6 @@ type TranscriptSegment = { text: string; words: TranscriptWord[] };
  */
 function CaptionContent(props: { entity: Entity }) {
   const world = useWorld();
-  const editor = useEditor();
   const tool = useTool();
   const [draft, setDraft] = createSignal('');
   const current = () => store(world, Chars).value[props.entity.id()] ?? '';
@@ -387,41 +379,7 @@ function CaptionContent(props: { entity: Entity }) {
   const commit = async () => {
     const text = draft().trim();
     if (!text || text === current().trim()) return;
-
-    const library = world.get(Library);
-    const asset = library?.get(props.entity.get(AssetId)?.value ?? '');
-    if (!library || !asset) {
-      toast.error('Could not find the caption transcript');
-      return;
-    }
-
-    try {
-      const segments = JSON.parse(await (await getAssetFile(asset)).text()) as TranscriptSegment[];
-      const fps = world.get(FrameRate)?.value ?? 30;
-      const time = (store(world, Computed).localTime[props.entity.id()] ?? 0) / fps;
-
-      let index = segments.findIndex((segment) => segment.words.length > 0 && segment.words[0]!.start <= time && segment.words.at(-1)!.end >= time);
-      if (index < 0) index = segments.findIndex((segment) => segment.words.length > 0 && segment.words[0]!.start >= time);
-      const segment = segments[index];
-      if (!segment) {
-        toast.error('No caption at the playhead');
-        return;
-      }
-
-      const start = segment.words[0]?.start ?? time;
-      const end = segment.words.at(-1)?.end ?? time + 1;
-      const words = text.split(/\s+/).filter(Boolean);
-      const step = (end - start) / Math.max(1, words.length);
-      segment.text = text;
-      segment.words = words.map((word, i) => ({ text: word, start: start + i * step, end: start + (i + 1) * step }));
-
-      const blob = new Blob([JSON.stringify(segments)], { type: 'application/json' });
-      const stored = await library.store(blob, { name: 'Captions edited.json' });
-      editor.editProperty(props.entity, 'src', stored.path);
-      toast('Caption updated');
-    } catch (error) {
-      toast.error('Could not update the caption', { description: (error as Error).message });
-    }
+    await commitCaptionText(world, props.entity, text);
   };
 
   return (

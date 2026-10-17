@@ -19,7 +19,7 @@
 import {
 	ChildOf, Computed, Culled, Geometry, Group, Hovering,
 	Interactive, KeepAspectRatio, RenderSurface, Root, Scene,
-	Chars, Selected, Skew, Time, Tool, ToolType, isText,
+	Chars, Selected, Skew, Time, isText,
 	decompose2D, entityPivot,
 	entityOffset, entityQuad, entityWorldMat, enterEntity,
 	findKeyframeTrackEntity, getParentEntity, getParentNode, getSceneAncestor,
@@ -36,6 +36,7 @@ import { syncKeyframe } from '../keyframes';
 import { beginPathEdit, pinViewBox } from '../path-tool';
 import { Hud, Keys, Pointer, SnapLines } from '../traits';
 import { getToolCursor, updateCursor, type CursorType } from './cursor';
+import { setInlineEditing } from '../inline-edit';
 import { mountNameInput } from '../hud/name-input';
 import {
 	buildSnapCandidatesFromCorners, buildSnapCandidatesFromQuad, findSnapTarget,
@@ -182,7 +183,7 @@ export function handleGeometryInteraction(world: World, event: DispatchedPointer
 		const entity = event.target.id;
 		if (isText(entity) || entity.has(Chars)) {
 			editor.select(entity);
-			world.set(Tool, { value: ToolType.TEXT_EDIT });
+			setInlineEditing(true);
 			return;
 		}
 	}
