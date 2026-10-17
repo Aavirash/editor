@@ -19,7 +19,7 @@
 import {
 	ChildOf, Computed, Culled, Geometry, Group, Hovering,
 	Interactive, KeepAspectRatio, RenderSurface, Root, Scene,
-	Selected, Skew, Time,
+	Selected, Skew, Time, Tool, ToolType, isText,
 	decompose2D, entityPivot,
 	entityOffset, entityQuad, entityWorldMat, enterEntity,
 	findKeyframeTrackEntity, getParentEntity, getParentNode, getSceneAncestor,
@@ -174,6 +174,14 @@ export function handleGeometryInteraction(world: World, event: DispatchedPointer
 
 	if (event.type === 'drag' || event.type === 'dragend') {
 		handleMaskInteraction(world, event);
+	}
+
+	// Double-click a text layer to edit what it says: the inspector's Content
+	// field takes focus (the same place the text tool types into).
+	if (event.type === 'dblclick' && event.target.kind === 'entity' && isText(event.target.id)) {
+		editor.select(event.target.id);
+		world.set(Tool, { value: ToolType.TEXT_EDIT });
+		return;
 	}
 
 	// Double-click on a path edits its vertices.
